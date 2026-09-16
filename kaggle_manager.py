@@ -23,7 +23,8 @@ REQUIRED ENVIRONMENT VARIABLES (GitHub Secrets):
 OPTIONAL (for workflow-level notifications):
     NTFY_TOPIC       - ntfy.sh topic
     TG_BOT_TOKEN     - Bot token
-    TG_CHAT_ID       - Your Telegram user ID*"""
+    TG_CHAT_ID       - Your Telegram user ID
+"""
 
 import os
 import sys
@@ -205,7 +206,7 @@ def action_start():
         if os.environ.get("KAGGLE_FORCE") == "1":
             log("Outside active hours, but KAGGLE_FORCE=1 -> starting anyway")
         else:
-            log(f"Outside active hours. Skipping. Time: {now_ist().strftime('%H:%M')} IST"
+            log(f"Outside active hours. Skipping. Time: {now_ist().strftime('%H:%M')} IST")
             return
 
     if in_time_window(START_WINDOW_BEGIN, START_WINDOW_END):
@@ -228,8 +229,8 @@ def action_stop():
         random_delay_in_window(STOP_WINDOW_END)
     else:
         jitter = random.randint(0, MAX_JITTER_MINUTES)
-          log(f"Adding {jitter} min jitter...")
-          time.sleep(jitter * 60)
+        log(f"Adding {jitter} min jitter...")
+        time.sleep(jitter * 60)
 
     log(f"Stopping: {slug}")
     wf_notify("stop", f"Notebook: {slug}")
