@@ -1,1 +1,100 @@
-sr
+# ============================================================
+# GitHub Actions Workflow - WZML-X Kaggle Schedule (v5)
+# ============================================================
+#
+# SCHEDULE (IST, GitHub runs in UTC):
+# 06:00 IST = Morning start (randomized 06:00-06:30 by manager)
+# 07:00 IST = Health check (ensure bot is running)
+# 15:00 IST = Midday health (ensure bot is running)
+# 22:30 IST = Evening stop (randomized 22:30-23:00 by manager)
+#
+# UTC conversions (IST = UTC + 5:30):
+# 06:00 IST = 00:30 UTC
+# 07:00 IST = 01:30 UTC
+# 15:00 IST = 09:30 UTC
+# 22:30 IST = 17:00 UTC
+#
+# REQUIRED GITHUB SECRETS:
+# KAGGLE_USERNAME - Kaggle username
+# KAGGLE_KEY - Kaggle API key
+# KAGGLE_NOTEBOOK - Notebook slug (username/notebook-title)
+#
+# OPTIONAL (for workflow notifications):
+# NTFY_TOPIC - ntfy.sh topic
+# TG_BOT_TOKEN - Bot token
+# TG_CHAT_ID - Your Telegram user ID
+#
+# PLACE AT: .github/workflows/kaggle_schedule.yml
+# ============================================================
+
+name: WZML-X Schedule
+
+on:
+  schedule:
+    - cron: "30 0 * * *"  # 06:00 IST - morning start
+    - cron: "30 1 * * *"  # 07:00 IST - morning health check
+    - cron: "30 9 * * *"  # 15:00 IST - midday health check
+    - cron: "0 17 * * *"  # 22:30 IST - evening stop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manage-kaggle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install Kaggle CLI (pinned to 1.6.17 for legacy auth)
+      run: |
+        pip install --upgrade pip
+        pip install kaggle==1.6.17
+
+    - name: Determine action from trigger
+      id: action
+      run: |
+        UTC_HOUR=$(date -u +"%H")
+        UTC_MIN=$(date -u +"%M")
+        echo "UTC time: ${UTC_HOUR}:${UTC_MIN}"
+
+        if [[ "$UTC_HOUR" -eq 0 && "$UTC_MIN" -ge 25 ]] ||            [[ "$UTC_HOUR" -eq 1 && "$UTC_MIN" -le 5 ]]; then
+          echo "action=start" >> $GITHUB_OUTPUT
+        elif [[ "$UTC_HOUR" -eq 1 && "$UTC_MIN" -ge 25 ]] ||            [[ "$UTC_HOUR" -eq 2 && "$UTC_MIN" -le 5 ]]; then
+          echo "action=ensure" >> $GITHUB_OUTPUT
+        elif [[ "$UTC_HOUR" -eq 9 && "$UTC_MIN" -ge 25 ]] ||            [[ "$UTC_HOUR" -eq 10 && "$UTC_MIN" -le 5 ]]; then
+          echo "action=ensure" >> $GITHUB_OUTPUT
+        elif [[ "$UTC_HOUR" -eq 16 && "$UTC_MIN" -ge 55 ]] ||            [[ "$UTC_HOUR" -eq 17 && "$UTC_MIN" -le 30 ]]; then
+          echo "action=stop" >> $GITHUB_OUTPUT
+        else
+          echo "action=ensure" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Run Kaggle Manager
+      env:
+        KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        KAGGLE_NOTEBOOK: ${{ secrets.KAGGLE_NOTEBOOK }}
+        NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+        TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+      run: |
+        echo "Action: ${{ steps.action.outputs.action }}"
+        python kaggle_manager.py ${{ steps.action.outputs.action }}
+
+    - name: Summary
+      if: always()
+      run: |
+        echo "================================"
+        echo " WZML-X Schedule Complete"
+        echo " Action: ${{ steps.action.outputs.action }}"
+        echo " Time: $(date)"
+        echo "================================"
