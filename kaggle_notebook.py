@@ -139,7 +139,7 @@ def parse_config(config_path):
             key = key.strip()
             value = value.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-                value = value[1:-1]
+                value = value[1:-1].strip()
             if key:
                 config[key] = value
     return config
@@ -528,7 +528,7 @@ def setup_wzml_services(config):
             if trackers.returncode == 0 and trackers.stdout.strip():
                 tlist = ",".join(trackers.stdout.split())[:4000]
                 if tlist:
-                    cmd.append(f"--bt-trackers={tlist}")
+                    cmd.append(f"--bt-tracker={tlist}")
         except Exception:
             pass
         try:
@@ -1182,6 +1182,25 @@ def main():
 
     env = os.environ.copy()
     env["PYTHONPATH"] = WZMLX_DIR + os.pathsep + env.get("PYTHONPATH", "")
+
+    # Export config.env keys as environment variables for the bot process.
+    # In the official Docker deployment, config.env is loaded via --env-file,
+    # which exports every key into the environment. WZML-X's Config.load_env()
+    # reads os.environ, and its load_config() only imports a config.py module
+    # (which we do not have). Without this export, TELEGRAM_API / TELEGRAM_HASH
+    # / BOT_TOKEN etc. never reach the bot and pyrogram dies with
+    # "The API key is required for new authorizations".
+    # We re-parse the copy in the WZML-X dir so the injected BASE_URL wins.
+    try:
+        launch_cfg = parse_config(CONFIG_DST) or parse_config(CONFIG_SRC)
+    except Exception:
+        launch_cfg = {}
+    exported = 0
+    for _k, _v in launch_cfg.items():
+        if _k and _v is not None and str(_v).strip():
+            env[_k] = str(_v).strip()
+            exported += 1
+    log(f"Exported {exported} config keys into bot environment")
 
     try:
         BOT_PROCESS = subprocess.Popen(
