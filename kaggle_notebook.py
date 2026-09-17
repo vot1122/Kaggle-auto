@@ -797,6 +797,73 @@ def apply_userrepo_patches():
         except Exception as e:
             log(f"  player fix: FAILED — {e}", "ERROR")
 
+    # Kaggle addition F — v15.4 stream auth boot-probe fix.
+    # With STREAM_PASS set, a first visit has no token yet, so the page's
+    # boot probe (GET /api/stream/{token}) is rejected 401 by the gated
+    # meta route and the template used to kill the page with
+    # "The streaming service did not respond" even though the password
+    # banner was waiting for input. Now: 401 is treated as
+    # "authentication in progress" (no fatal), every other failure names
+    # its HTTP status in the error text, and the stall prompt is hidden
+    # while the auth banner is on screen.
+    bp_path = os.path.join(WZMLX_DIR, html_rel)
+    if os.path.isfile(bp_path):
+        try:
+            with open(bp_path, "r", encoding="utf-8") as f:
+                bp = f.read()
+            if "wzml-bootprobe-style" not in bp:
+                probe_old = (
+                    '''                    if (r.status === 404) throw new Error("gone");
+                    if (!r.ok) throw new Error("bad");'''
+                )
+                probe_new = (
+                    '''                    if (r.status === 404) throw new Error("gone");
+                    if (r.status === 401) throw new Error("wzauth");
+                    if (!r.ok) throw new Error("bad http " + r.status);'''
+                )
+                catch_old = (
+                    '''                    } else {
+                        fatal("Could not load this file",
+                            "The streaming service did not respond. Try again shortly.");
+                    }
+                });'''
+                )
+                catch_new = (
+                    '''                    } else if (e && e.message === "wzauth") {
+                        /* STREAM_PASS is set and this browser has no token yet:
+                           the auth banner is on screen. After the password is
+                           accepted the page reloads with the token attached. */
+                    } else {
+                        fatal("Could not load this file",
+                            "The streaming service did not respond ("
+                            + (e && e.message ? e.message : "network error")
+                            + ").");
+                    }
+                });'''
+                )
+                css_fix = (
+                    '<style id="wzml-bootprobe-style">'
+                    'body:has(#wzml-auth-gate) .stall{display:none !important}'
+                    '</style>\n'
+                )
+                n_changes = 0
+                if probe_old in bp:
+                    bp = bp.replace(probe_old, probe_new, 1)
+                    n_changes += 1
+                if catch_old in bp:
+                    bp = bp.replace(catch_old, catch_new, 1)
+                    n_changes += 1
+                if "</head>" in bp:
+                    bp = bp.replace("</head>", css_fix + "</head>", 1)
+                    n_changes += 1
+                with open(bp_path, "w", encoding="utf-8") as f:
+                    f.write(bp)
+                log(f"  boot probe: v15.4 auth boot-probe fix applied ({n_changes}/3 edits)")
+            else:
+                log("  boot probe: already present in stream.html")
+        except Exception as e:
+            log(f"  boot probe: FAILED — {e}", "ERROR")
+
     log("WZML-X-Bot patch kit applied")
     return True
 
