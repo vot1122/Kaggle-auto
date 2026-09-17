@@ -400,7 +400,17 @@ def apply_patches():
     log("=" * 60)
     log("Applying source patches")
     log("=" * 60)
+    # These patches are superseded by the WZML-X-Bot patch kit (the battle-
+    # tested patch set from the user's GitHub Actions deployment), which is
+    # applied right after this step by apply_userrepo_patches().
+    retired = {
+        "patch_db.py", "patch_tstream.py", "patch_sserv.py", "patch_tmon.py",
+        "patch7_user.py", "patch8_sserv.py", "patch9_html.py", "patch10_ws.py",
+    }
     for name, target_rel, _b64 in PATCH_DATA:
+        if name in retired:
+            log(f"  {name}: superseded by WZML-X-Bot patch kit — skipping")
+            continue
         patch_path = os.path.join(PATCH_TMP_DIR, name)
         target_path = os.path.join(WZMLX_DIR, target_rel)
         if not os.path.isfile(target_path):
@@ -424,6 +434,343 @@ def apply_patches():
         except Exception as e:
             log(f"  {name}: FAILED — {e}", "ERROR")
     log("All patches applied")
+
+
+# ============================================================================
+# WZML-X-BOT PATCH KIT (user stream + UI + stream authentication)
+# ============================================================================
+# The patch kit is downloaded at runtime from the user's own repository
+# (hackaking20/WZML-X-Bot) — the same patch set the working GitHub Actions
+# deployment applies, in the same order. Keeping it runtime-fetched means any
+# future tweak to that repo flows into the Kaggle bot automatically.
+
+AUTH_BANNER_HTML = """<style>
+#wzml-auth-gate{position:fixed;inset:0;z-index:2147483647;background:rgba(4,6,12,.94);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;color:#e8ecf7}
+#wzml-auth-gate .wag-box{background:var(--surface,#10141f);border:1px solid var(--line,#2a3350);border-radius:14px;padding:34px 30px;width:min(92vw,380px);text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.55)}
+#wzml-auth-gate .wag-ico{font-size:36px;margin-bottom:10px}
+#wzml-auth-gate h3{color:var(--text,#e8ecf7);font-size:18px;margin:0 0 8px;font-weight:600}
+#wzml-auth-gate p{color:var(--muted,#8b94ad);font-size:13px;margin:0 0 20px;line-height:1.5}
+#wzml-auth-gate input{width:100%;padding:12px 14px;border-radius:9px;border:1px solid #2a3350;background:var(--bg,#0a0d16);color:var(--text,#e8ecf7);font-size:14px;outline:none;margin-bottom:12px;box-sizing:border-box}
+#wzml-auth-gate input:focus{border-color:var(--accent-2,#5b9dff)}
+#wzml-auth-gate button{width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,var(--accent,#5b9dff),var(--accent-2,#7d6bff));color:#fff;font-size:14px;font-weight:600;cursor:pointer}
+#wzml-auth-gate .wag-err{color:#ff6b6b;font-size:12px;margin-top:10px;display:none}
+</style>
+<script>
+(function(){
+  var qs = new URLSearchParams(location.search);
+  var tok = qs.get('auth') || '';
+  try { if(!tok) tok = localStorage.getItem('wzml_stream_auth') || ''; } catch(e){}
+  function addAuth(u){
+    try{
+      if(!tok || !u) return u;
+      if(u.charAt(0) === '#') return u;
+      if(u.indexOf('auth=') >= 0) return u;
+      if(u.indexOf('/api/stream_auth') >= 0) return u;
+      return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'auth=' + encodeURIComponent(tok);
+    }catch(e){ return u; }
+  }
+  function rewrite(root){
+    try{
+      var els = root.querySelectorAll('video, audio, source, track, a[href]');
+      for(var i=0;i<els.length;i++){
+        var el = els[i];
+        if(el.hasAttribute('src')) el.setAttribute('src', addAuth(el.getAttribute('src')));
+        if(el.hasAttribute('href')) el.setAttribute('href', addAuth(el.getAttribute('href')));
+      }
+    }catch(e){}
+  }
+  function armRewrites(){
+    if(!tok) return;
+    rewrite(document);
+    try{
+      new MutationObserver(function(){ rewrite(document); })
+        .observe(document.documentElement, {subtree:true, childList:true, attributes:true});
+    }catch(e){}
+  }
+  fetch('/api/stream_auth', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: '{}'
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; });
+  }).then(function(j){
+    var passSet = !(j && j.error === 'STREAM_PASS not set');
+    if(!passSet){ armRewrites(); return; }
+    if(tok){ armRewrites(); return; }
+    showBanner();
+  }).catch(function(){ armRewrites(); });
+  function showBanner(){
+    if(document.getElementById('wzml-auth-gate')) return;
+    var d = document.createElement('div');
+    d.id = 'wzml-auth-gate';
+    d.innerHTML = '<div class="wag-box">' +
+      '<div class="wag-ico">🔒</div>' +
+      '<h3>Authenticate first</h3>' +
+      '<p>This stream is protected. Enter the stream password to continue.</p>' +
+      '<input id="wag-pass" type="password" placeholder="Stream password" autocomplete="current-password">' +
+      '<button id="wag-go">Continue</button>' +
+      '<div class="wag-err" id="wag-err">Wrong password — try again.</div>' +
+      '</div>';
+    (document.body || document.documentElement).appendChild(d);
+    function submit(){
+      var p = document.getElementById('wag-pass').value;
+      document.getElementById('wag-err').style.display = 'none';
+      fetch('/api/stream_auth', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({password: p})
+      }).then(function(r){ return r.json().catch(function(){return {};}); }).then(function(j){
+        if(j && j.token){
+          try{ localStorage.setItem('wzml_stream_auth', j.token); }catch(e){}
+          var u = new URL(location.href);
+          u.searchParams.set('auth', j.token);
+          location.replace(u.toString());
+        } else {
+          document.getElementById('wag-err').style.display = 'block';
+        }
+      }).catch(function(){
+        document.getElementById('wag-err').style.display = 'block';
+      });
+    }
+    document.getElementById('wag-go').addEventListener('click', submit);
+    document.getElementById('wag-pass').addEventListener('keydown', function(ev){
+      if(ev.key === 'Enter') submit();
+    });
+    setTimeout(function(){ try{ document.getElementById('wag-pass').focus(); }catch(e){} }, 50);
+  }
+})();
+</script>"""
+
+
+def apply_userrepo_patches():
+    """
+    Download the WZML-X-Bot patch kit (the same patch set the working GitHub
+    Actions deployment uses) and apply it to the cloned WZML-X tree.
+
+    Order matches .github/workflows/wzml-bot.yml from hackaking20/WZML-X-Bot:
+    patch2 (db_handler), patch3 (tg_stream retry), patch5 (tunnel_monitor),
+    the user_stream installer (UserStream module + stream_server/wserver
+    rewrites + stall UI + STREAM_PASS config), the stream.html/landing.html
+    UI patches (9, 12, 16, 17, 18, 19, 20, 21), and patch15 (bot_settings
+    STREAM_PASS descriptions, so STREAM_PASS is editable via /bs).
+
+    Two Kaggle-specific additions are layered on afterwards:
+    - the stream password gate is extended from user-mode-only streams to
+      ALL streams (when STREAM_PASS is set; no password set = no gating), and
+    - an "Authenticate first" banner is injected into stream.html.
+    """
+    log("=" * 60)
+    log("Applying WZML-X-Bot patch kit (user stream + UI + auth)")
+    log("=" * 60)
+
+    userrepo_dir = os.path.join(KAGGLE_WORKING, "_userrepo")
+    tgz_path = os.path.join(KAGGLE_WORKING, "userrepo.tgz")
+    tar_url = (
+        "https://codeload.github.com/hackaking20/WZML-X-Bot/"
+        "tar.gz/refs/heads/main"
+    )
+
+    try:
+        req = urllib.request.Request(tar_url)
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            with open(tgz_path, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+        if os.path.isdir(userrepo_dir):
+            shutil.rmtree(userrepo_dir, ignore_errors=True)
+        os.makedirs(userrepo_dir, exist_ok=True)
+        import tarfile
+        with tarfile.open(tgz_path) as tf:
+            tf.extractall(userrepo_dir)
+        roots = [
+            os.path.join(userrepo_dir, n)
+            for n in os.listdir(userrepo_dir)
+            if os.path.isdir(os.path.join(userrepo_dir, n))
+        ]
+        if not roots:
+            log("patch kit: extracted archive has no directories", "ERROR")
+            return False
+        repo_root = roots[0]
+        log(f"patch kit downloaded and extracted")
+    except Exception as e:
+        log(f"patch kit download failed: {e}", "ERROR")
+        log("  >> STREAMING WILL NOT BE PATCHED THIS RUN. The kit is fetched", "ERROR")
+        log("     from https://github.com/hackaking20/WZML-X-Bot — make sure it", "ERROR")
+        log("     is public and reachable from Kaggle.", "ERROR")
+        return False
+
+    def run_patch(script, target, label):
+        target_path = os.path.join(WZMLX_DIR, target)
+        if not os.path.isfile(target_path):
+            log(f"  {label}: target not found — {target}", "WARN")
+            return
+        try:
+            r = subprocess.run(
+                [sys.executable, os.path.join(repo_root, script), target_path],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            for line in (r.stdout or "").strip().split("\n"):
+                if line:
+                    log(f"  {label}: {line}")
+            if (r.stderr or "").strip():
+                for line in r.stderr.strip().split("\n"):
+                    log(f"  {label} STDERR: {line}", "WARN")
+            if r.returncode != 0:
+                log(f"  {label}: exited with code {r.returncode}", "WARN")
+        except Exception as e:
+            log(f"  {label}: FAILED — {e}", "ERROR")
+
+    run_patch("patches/patch2.py", "bot/helper/ext_utils/db_handler.py", "patch2")
+    run_patch("patches/patch3.py", "bot/helper/telegram_helper/tg_stream.py", "patch3")
+    run_patch("patches/patch5.py", "bot/helper/ext_utils/tunnel_monitor.py", "patch5")
+
+    us_src = os.path.join(repo_root, "user_stream")
+    us_dst = os.path.join(WZMLX_DIR, "user_stream")
+    try:
+        if os.path.isdir(us_dst):
+            shutil.rmtree(us_dst)
+        shutil.copytree(us_src, us_dst)
+        r = subprocess.run(
+            [sys.executable, os.path.join(us_dst, "install_patch.py"), WZMLX_DIR],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        for line in (r.stdout or "").strip().split("\n"):
+            if line:
+                log(f"  user_stream: {line}")
+        if (r.stderr or "").strip():
+            for line in r.stderr.strip().split("\n"):
+                log(f"  user_stream STDERR: {line}", "WARN")
+        if r.returncode != 0:
+            log(f"  user_stream: exited with code {r.returncode}", "ERROR")
+    except Exception as e:
+        log(f"  user_stream: FAILED — {e}", "ERROR")
+
+    html_rel = "web/templates/stream.html"
+    landing_rel = "web/templates/landing.html"
+    run_patch("patches/patch9.py", html_rel, "patch9")
+    run_patch("patches/patch12.py", html_rel, "patch12")
+    run_patch("patches/patch16.py", html_rel, "patch16")
+    run_patch("patches/patch17.py", html_rel, "patch17")
+    run_patch("patches/patch18.py", landing_rel, "patch18")
+    run_patch("patches/patch19.py", html_rel, "patch19")
+    run_patch("patches/patch20.py", html_rel, "patch20")
+    run_patch("patches/patch21.py", html_rel, "patch21")
+    run_patch("patches/patch15.py", "bot/modules/bot_settings.py", "patch15")
+
+    # Kaggle addition A — universal stream password gate
+    ss_path = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+    try:
+        with open(ss_path, "r", encoding="utf-8") as f:
+            ss = f.read()
+        changed = False
+        if "if use_user and not _us_check_auth(request):" in ss:
+            ss = ss.replace(
+                "if use_user and not _us_check_auth(request):",
+                "if not _us_check_auth(request):",
+            )
+            changed = True
+        if "user stream requires authentication" in ss:
+            ss = ss.replace(
+                "user stream requires authentication",
+                "authenticate first",
+            )
+            changed = True
+        serve_anchor = (
+            "async def _serve(request, kind):\n"
+            "    _, cid, mid = await _resolve(request)\n"
+        )
+        if serve_anchor in ss and "# KAGGLE_AUTH_GATE" not in ss:
+            ss = ss.replace(
+                serve_anchor,
+                "async def _serve(request, kind):\n"
+                "    # KAGGLE_AUTH_GATE: require the stream password (only when\n"
+                "    # STREAM_PASS is set) before serving any file bytes\n"
+                "    if not _us_check_auth(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    _, cid, mid = await _resolve(request)\n",
+            )
+            changed = True
+        if changed:
+            with open(ss_path, "w", encoding="utf-8") as f:
+                f.write(ss)
+            log("  auth gate: all streams require STREAM_PASS when it is set")
+        elif "# KAGGLE_AUTH_GATE" not in ss:
+            log("  auth gate: anchors not found — kit may not have applied", "WARN")
+    except Exception as e:
+        log(f"  auth gate: FAILED — {e}", "ERROR")
+
+    # Kaggle addition B — "Authenticate first" banner in stream.html
+    html_path = os.path.join(WZMLX_DIR, html_rel)
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            h = f.read()
+        if "wzml-auth-gate" not in h:
+            if "</head>" in h:
+                h = h.replace("</head>", AUTH_BANNER_HTML + "\n</head>", 1)
+            else:
+                h = h + AUTH_BANNER_HTML
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(h)
+            log("  auth banner: injected into stream.html")
+        else:
+            log("  auth banner: already present")
+    except Exception as e:
+        log(f"  auth banner: FAILED — {e}", "ERROR")
+
+    # Kaggle addition C — v15.1 aesthetic overhaul: completely restyled design
+    # (new typography, animated aurora backdrop, glass chrome, cinematic
+    # player frame, polished controls) + 3 new themes (Onyx Noir, Ocean Aqua,
+    # Ember Glow) registered into the existing theme switcher alongside the
+    # original four. Every layer is built on the theme CSS variables, so all
+    # 7 themes share the new look.
+    for page_rel in (html_rel, landing_rel):
+        page_path = os.path.join(WZMLX_DIR, page_rel)
+        if not os.path.isfile(page_path):
+            continue
+        try:
+            with open(page_path, "r", encoding="utf-8") as f:
+                h = f.read()
+            if "wzml-revamp-style" not in h:
+                head_inject = REVAMP_FONTS + REVAMP_CSS
+                if "</head>" in h:
+                    h = h.replace("</head>", head_inject + "\n</head>", 1)
+                else:
+                    h = h + head_inject
+                if "</body>" in h:
+                    h = h.replace("</body>", REVAMP_JS + "\n</body>", 1)
+                else:
+                    h = h + REVAMP_JS
+                with open(page_path, "w", encoding="utf-8") as f:
+                    f.write(h)
+                log(f"  ui revamp: v15.1 aesthetic applied to {page_rel}")
+            else:
+                log(f"  ui revamp: already present in {page_rel}")
+        except Exception as e:
+            log(f"  ui revamp: FAILED on {page_rel} — {e}", "ERROR")
+
+    log("WZML-X-Bot patch kit applied")
+    return True
+
+
+
+
+# ─── v15.1 aesthetic overhaul assets ────────────────────────────────────
+
+REVAMP_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">'
+
+REVAMP_CSS = '<style id="wzml-revamp-style">\n' + '/* == WZML-X v15.1 — Aesthetic Overhaul == */\n\n/* -- New theme: Onyx Noir (dark, violet) -- */\n[data-theme="onyx"]{\n  --bg:#050508; --surface:#0a0a12; --surface-2:#0e0e18;\n  --line:rgba(139,92,246,.22); --line-2:#8b5cf6;\n  --text:#f4f2ff; --muted:#b6b0d4;\n  --accent:#8b5cf6; --accent-2:#a78bfa; --accent-soft:#1a1033;\n  --t-glyph:#0a0618; --t-veil-grid:rgba(139,92,246,.12);\n  --t-veil-top:rgba(139,92,246,.08); --t-veil-bot:rgba(16,8,38,.5);\n  --t-spot-grid:rgba(196,181,253,.14);\n  --t-card-bg:linear-gradient(180deg,rgba(12,10,20,.92),rgba(6,5,12,.94));\n  --t-card-border:rgba(139,92,246,.5);\n  --line-strong:rgba(139,92,246,.45); --deep:#5b21b6; --mid:#7c3aed;\n  --light:#8b5cf6; --pale:#a78bfa; color-scheme:dark;\n  --t-body-before-top:rgba(139,92,246,.16); --t-body-before-bot:rgba(46,16,101,.38);\n  --rev-glow-1:rgba(139,92,246,.18); --rev-glow-2:rgba(167,139,250,.12);\n  --rev-glow-3:rgba(59,7,100,.22);\n}\n\n/* -- New theme: Ocean Aqua (dark, teal) -- */\n[data-theme="aqua"]{\n  --bg:#03141b; --surface:#051e28; --surface-2:#07242f;\n  --line:rgba(34,211,238,.22); --line-2:#22d3ee;\n  --text:#eafcff; --muted:#a3c6d1;\n  --accent:#22d3ee; --accent-2:#67e8f9; --accent-soft:#062430;\n  --t-glyph:#04141b; --t-veil-grid:rgba(34,211,238,.12);\n  --t-veil-top:rgba(34,211,238,.08); --t-veil-bot:rgba(4,26,35,.5);\n  --t-spot-grid:rgba(165,243,252,.14);\n  --t-card-bg:linear-gradient(180deg,rgba(4,22,30,.92),rgba(2,14,19,.94));\n  --t-card-border:rgba(34,211,238,.45);\n  --line-strong:rgba(34,211,238,.42); --deep:#0e7490; --mid:#0891b2;\n  --light:#22d3ee; --pale:#67e8f9; color-scheme:dark;\n  --t-body-before-top:rgba(34,211,238,.14); --t-body-before-bot:rgba(8,74,96,.4);\n  --rev-glow-1:rgba(34,211,238,.14); --rev-glow-2:rgba(103,232,249,.1);\n  --rev-glow-3:rgba(8,145,178,.2);\n}\n\n/* -- New theme: Ember Glow (dark, warm amber) -- */\n[data-theme="ember"]{\n  --bg:#120a05; --surface:#1a0f07; --surface-2:#21140a;\n  --line:rgba(245,158,11,.22); --line-2:#f59e0b;\n  --text:#fdf3e7; --muted:#d0b8a0;\n  --accent:#f59e0b; --accent-2:#fbbf24; --accent-soft:#2a1a06;\n  --t-glyph:#170d05; --t-veil-grid:rgba(245,158,11,.1);\n  --t-veil-top:rgba(245,158,11,.07); --t-veil-bot:rgba(28,14,5,.5);\n  --t-spot-grid:rgba(253,230,138,.12);\n  --t-card-bg:linear-gradient(180deg,rgba(26,15,7,.92),rgba(16,9,4,.94));\n  --t-card-border:rgba(245,158,11,.45);\n  --line-strong:rgba(245,158,11,.42); --deep:#b45309; --mid:#d97706;\n  --light:#f59e0b; --pale:#fbbf24; color-scheme:dark;\n  --t-body-before-top:rgba(245,158,11,.12); --t-body-before-bot:rgba(120,53,15,.35);\n  --rev-glow-1:rgba(245,158,11,.14); --rev-glow-2:rgba(251,191,36,.1);\n  --rev-glow-3:rgba(180,83,9,.2);\n}\n\n/* -- Aurora glow colors for the original four themes -- */\n[data-theme="dark"]{\n  --rev-glow-1:rgba(61,135,255,.14); --rev-glow-2:rgba(91,157,255,.1);\n  --rev-glow-3:rgba(26,74,176,.18);\n}\n[data-theme="light"]{\n  --rev-glow-1:rgba(61,135,255,.16); --rev-glow-2:rgba(147,197,253,.2);\n  --rev-glow-3:rgba(196,181,253,.16);\n}\n[data-theme="vibrant"]{\n  --rev-glow-1:rgba(168,85,247,.18); --rev-glow-2:rgba(236,72,153,.14);\n  --rev-glow-3:rgba(124,58,237,.18);\n}\n[data-theme="blossom"]{\n  --rev-glow-1:rgba(244,114,182,.18); --rev-glow-2:rgba(251,207,232,.22);\n  --rev-glow-3:rgba(196,181,253,.18);\n}\n\n/* -- Typography & tokens -- */\n:root{\n  --sans:\'Inter\',\'SF Pro Text\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,sans-serif;\n  --display:\'Space Grotesk\',\'SF Pro Display\',-apple-system,BlinkMacSystemFont,sans-serif;\n  --r:16px; --r-frame:22px;\n}\nbody{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}\nh1,h2,h3,h4,.wordmark,.logo,.tagline,.subtitle{font-family:var(--display);letter-spacing:-.02em}\n\n/* -- Animated aurora backdrop -- */\nbody::before{\n  content:"";position:fixed;inset:-22%;z-index:0;pointer-events:none;\n  background:\n    radial-gradient(38% 32% at 18% 12%,var(--rev-glow-1),transparent 60%),\n    radial-gradient(34% 30% at 82% 20%,var(--rev-glow-2),transparent 62%),\n    radial-gradient(40% 36% at 50% 94%,var(--rev-glow-3),transparent 65%);\n  filter:blur(44px) saturate(1.15);opacity:.85;\n  animation:wzml-rev-drift 26s ease-in-out infinite alternate;\n}\n@keyframes wzml-rev-drift{\n  from{transform:translate3d(-1.5%,-1%,0) scale(1)}\n  to{transform:translate3d(1.5%,1.5%,0) scale(1.05)}\n}\n@media (prefers-reduced-motion:reduce){body::before{animation:none}}\n\n/* -- Glass chrome -- */\n.topbar{\n  background:color-mix(in srgb,var(--surface) 74%,transparent);\n  -webkit-backdrop-filter:blur(16px) saturate(1.25);\n  backdrop-filter:blur(16px) saturate(1.25);\n  border-bottom:1px solid var(--line);\n}\n@supports not (background:color-mix(in srgb,red 50%,blue)){\n  .topbar{background:var(--surface)}\n}\n\n/* -- Cinematic player frame -- */\nvideo-player,media-controller,video-minimal-skin{\n  display:block;border-radius:var(--r-frame,22px);overflow:hidden;\n}\nvideo-player,media-controller{\n  box-shadow:0 34px 90px -24px rgba(0,0,0,.7),0 0 0 1px var(--line),0 0 110px -36px var(--accent);\n}\nvideo#player{border-radius:inherit;background:#000}\n\n/* -- Buttons -- */\n.btn,.button{\n  border-radius:999px;font-weight:600;\n  transition:transform .18s ease,box-shadow .18s ease,filter .18s ease;\n}\n.btn:hover,.button:hover{transform:translateY(-1px)}\n.btn:active,.button:active{transform:translateY(0)}\n.btn.primary{\n  background:linear-gradient(135deg,var(--accent),var(--accent-2));\n  border:1px solid color-mix(in srgb,var(--accent) 55%,transparent);\n  box-shadow:0 8px 24px -8px var(--accent);\n}\n.btn.primary:hover{box-shadow:0 12px 30px -8px var(--accent-2);filter:saturate(1.12)}\n\n/* -- Info cards -- */\n.info-row{border-radius:12px;transition:background .16s ease}\n.info-row:hover{background:color-mix(in srgb,var(--accent) 8%,transparent)}\n.key{letter-spacing:.05em}\n\n/* -- Theme switcher polish + new swatches -- */\n.theme-panel{border-radius:14px;box-shadow:0 18px 50px -12px rgba(0,0,0,.55)}\n.theme-option{border-radius:10px}\n.theme-option:hover{background:color-mix(in srgb,var(--accent) 13%,transparent)}\n.sw-onyx{background:linear-gradient(135deg,#0b0b12,#8b5cf6)}\n.sw-aqua{background:linear-gradient(135deg,#04202e,#22d3ee)}\n.sw-ember{background:linear-gradient(135deg,#1c0e05,#f59e0b)}\n\n/* -- Toasts / stall box -- */\n.toast,.stall-box{border-radius:12px;box-shadow:0 14px 40px -10px rgba(0,0,0,.55)}\n.toast,.stall-box,.theme-panel{\n  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);\n}\n\n/* -- Inputs -- */\ninput[type=text],input[type=password],input[type=search],select{\n  border-radius:10px;border:1px solid var(--line);background:var(--surface-2);\n  color:var(--text);transition:border-color .15s ease;\n}\ninput:focus{border-color:var(--accent-2)}\n\n/* -- Scrollbars & selection -- */\n*{scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}\n::-webkit-scrollbar{width:8px;height:8px}\n::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px}\n::-webkit-scrollbar-track{background:transparent}\n::selection{background:var(--accent);color:#fff}\n\n/* -- Focus rings -- */\n:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}\n\n/* -- Wordmark gradient -- */\n.wordmark,.logo{letter-spacing:-.02em}\n' + '\n</style>'
+
+REVAMP_JS = '<script>\n' + "(function(){\n  function ready(fn){\n    if(document.readyState !== 'loading'){ fn(); }\n    else{ document.addEventListener('DOMContentLoaded', fn); }\n  }\n  ready(function(){\n    var panel = document.getElementById('themePanel');\n    if(!panel || panel.getAttribute('data-revamp') === '1'){ return; }\n    panel.setAttribute('data-revamp', '1');\n    var themes = [\n      {id:'onyx', label:'Onyx Noir', color:'#8b5cf6'},\n      {id:'aqua', label:'Ocean Aqua', color:'#22d3ee'},\n      {id:'ember', label:'Ember Glow', color:'#f59e0b'}\n    ];\n    themes.forEach(function(t){\n      var b = document.createElement('button');\n      b.className = 'theme-option';\n      b.dataset.t = t.id;\n      var s = document.createElement('span');\n      s.className = 'theme-swatch sw-' + t.id;\n      b.appendChild(s);\n      b.appendChild(document.createTextNode(' ' + t.label));\n      b.addEventListener('click', function(){\n        document.documentElement.setAttribute('data-theme', t.id);\n        try{ localStorage.setItem('wzml-theme', t.id); }catch(e){}\n        document.querySelectorAll('.theme-option').forEach(function(o){\n          o.classList.toggle('active', o.dataset.t === t.id);\n        });\n        var btn = document.getElementById('themeBtn');\n        if(btn){ btn.style.background = t.color; btn.style.borderColor = t.color; }\n      });\n      panel.appendChild(b);\n    });\n  });\n})();\n" + '\n</script>'
 
 
 def apply_sed_patches():
@@ -1440,6 +1787,7 @@ def main():
     write_patch_scripts()
     apply_patches()
     apply_sed_patches()
+    apply_userrepo_patches()
 
     # ------------------------------------------------------------------
     # Step 5: Install system packages and Python deps
