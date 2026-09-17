@@ -146,6 +146,91 @@ def parse_config(config_path):
 
 
 # ============================================================================
+# SECTION 2.5 — ERROR DIAGNOSIS ENGINE
+# ============================================================================
+# Every error signature below is translated into its actual cause and the fix,
+# so the log explains WHY something failed instead of just showing the error.
+
+DIAGNOSES = [
+    ("AUTH_KEY_UNREGISTERED",
+     "CAUSE: Telegram no longer recognizes this session string - it was revoked "
+     "(logging out, regenerating a new session, or Telegram invalidating it). "
+     "FIX: run /exportsession on a working bot with the same account, copy the "
+     "new string from Saved Messages, replace USER_SESSION_STRING in the Kaggle "
+     "dataset config.env, save the dataset, re-run."),
+    ("AUTH_KEY_DUPLICATED",
+     "CAUSE: the same session string is being used by two running instances at "
+     "the same time (e.g. the Actions bot and the Kaggle bot both running). "
+     "FIX: stop one of the two instances, or give each its own session string."),
+    ("terminated by other getUpdates request",
+     "CAUSE: another running instance is polling the same bot token "
+     "(two bots, one token). FIX: stop the other instance (pause the Actions "
+     "workflow or stop the Kaggle kernel) - one token, one instance."),
+    ("API_ID_INVALID",
+     "CAUSE: TELEGRAM_API / TELEGRAM_HASH values are wrong or belong to a "
+     "different app. FIX: verify both values at my.telegram.org."),
+    ("PHONE_CODE_INVALID",
+     "CAUSE: OTP entered without spaces. FIX: enter the login code with "
+     "spaces between digits, e.g. '1 2 3 4 5'."),
+    ("error code: 1010",
+     "CAUSE: Cloudflare's browser-integrity check blocked the request before it "
+     "reached the Worker (non-browser User-Agent). "
+     "FIX: already handled - the notebook sends a browser User-Agent. If it "
+     "still appears, the Worker's security settings are blocking API traffic."),
+    ("unauthorized",
+     "CAUSE (Worker): the WORKER_SECRET in the dataset config.env does not "
+     "match the WORKER_SECRET variable set in the Cloudflare Worker's settings. "
+     "FIX: compare both values and make them identical."),
+    ("ModuleNotFoundError",
+     "CAUSE: a Python module that exists only in the official Docker image was "
+     "missing. FIX: report the module name - it needs a shim or pip install "
+     "added to the notebook."),
+    ("ACCESS_TOKEN_INVALID",
+     "COSMETIC: the Telegraph token is invalid, so the bot cannot create its "
+     "log page. Everything else works; replace TELEGRAPH_TOKEN if you want it."),
+    ("FloodWait",
+     "CAUSE: Telegram rate limit hit. The bot waits it out automatically - "
+     "no action needed unless it happens constantly."),
+    ("ECONNREFUSED",
+     "CAUSE: a local service the bot expects is not running. If it mentions "
+     "port 6800 it is the aria2 daemon, 8090/8080 qBittorrent/WebUI, 8091 "
+     "the stream server. FIX: report it - the notebook will start it."),
+    ("latin-1",
+     "CAUSE: a non-ASCII character (usually an em-dash) in a header the bot "
+     "encodes as latin-1. FIX: already handled by the notebook's sanitizer."),
+    ("ServerSelectionTimeoutError",
+     "CAUSE: cannot reach MongoDB. FIX: check DATABASE_URL in the dataset "
+     "config.env and the cluster's network access list."),
+    ("OperationFailure",
+     "CAUSE: MongoDB rejected the credentials. FIX: check the username/password "
+     "inside DATABASE_URL."),
+]
+
+
+def explain_errors(text):
+    """Return human-readable cause+fix for every known signature in text."""
+    hits = []
+    for key, explanation in DIAGNOSES:
+        if key in text:
+            hits.append((key, explanation))
+    return hits
+
+
+def log_diagnosis(text, seen=None):
+    """Log explanations for known error signatures found in text.
+
+    `seen` is a set of keys already explained (pass a persistent set to avoid
+    repeating the same diagnosis for every matching line).
+    """
+    for key, explanation in explain_errors(text):
+        if seen is not None:
+            if key in seen:
+                continue
+            seen.add(key)
+        log(f"DIAGNOSIS >> {explanation}", "WARN")
+
+
+# ============================================================================
 # SECTION 3 — NOTIFICATION (Telegram + ntfy.sh)
 # ============================================================================
 
@@ -488,6 +573,61 @@ def setup_wzml_services(config):
     except Exception as e:
         log(f"Failed to write wz_bin shim: {e}", "ERROR")
 
+    # (a2) mega SDK stub module
+    # `bot/.../mega_upload.py` and `mega_listener.py` import the compiled
+    # MEGA SDK bindings (`from mega import MegaApi, ...`) unconditionally at
+    # module load time. The SDK is baked into the Docker base image but has no
+    # prebuilt wheel on PyPI (building it needs swig + 15+ min). The bot's own
+    # code is already defensive (checks `MegaCancelToken is None`, and
+    # add_mega_upload bails out unless MEGA credentials are configured), so a
+    # stub module is safe: it satisfies the imports and only raises if someone
+    # actually attempts a MEGA transfer.
+    try:
+        mega_pkg_dir = os.path.join(WZMLX_DIR, "mega")
+        os.makedirs(mega_pkg_dir, exist_ok=True)
+        with open(os.path.join(mega_pkg_dir, "__init__.py"), "w") as f:
+            f.write(
+                '''"""Stub for the compiled MEGA SDK Python bindings.
+
+The real module is only present in the official Docker image.
+This stub satisfies import-time usage; actual MEGA transfers
+are disabled in this deployment.
+"""
+
+class _MegaUnavailable:
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError(
+            "MEGA SDK is not available in this deployment; "
+            "MEGA transfers are disabled."
+        )
+
+class MegaApi(_MegaUnavailable):
+    pass
+
+class MegaCancelToken:
+    @staticmethod
+    def createInstance():
+        return None
+
+class MegaError(Exception):
+    pass
+
+class MegaListener:
+    pass
+
+class MegaRequest:
+    pass
+
+class MegaTransfer:
+    pass
+
+class MegaUploadOptions:
+    PATH = 0
+''')
+        log("mega SDK stub module written (MEGA transfers disabled)")
+    except Exception as e:
+        log(f"Failed to write mega stub: {e}", "ERROR")
+
     # (b) aria2c RPC daemon on :6800
     if _port_open("127.0.0.1", 6800):
         log("aria2c RPC daemon already listening on :6800")
@@ -533,11 +673,19 @@ def setup_wzml_services(config):
             pass
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            if _port_open("127.0.0.1", 6800):
+            # aria2c daemonizes (forks) before binding the RPC port, so the
+            # first port probe can race ahead of the daemon. Retry briefly.
+            _up = False
+            for _ in range(6):
+                if _port_open("127.0.0.1", 6800):
+                    _up = True
+                    break
+                time.sleep(1.0)
+            if _up:
                 log("aria2c RPC daemon started on :6800")
             else:
                 msg = (r.stderr or r.stdout or "").strip()[:300]
-                log(f"aria2c daemon not reachable (rc={r.returncode}): {msg}", "WARN")
+                log(f"aria2c daemon not reachable after retries (rc={r.returncode}): {msg}", "WARN")
         except Exception as e:
             log(f"aria2c daemon failed to start: {e}", "ERROR")
 
@@ -818,6 +966,15 @@ def sync_to_worker(config, tunnel_url):
     req = urllib.request.Request(endpoint, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     req.add_header("X-Tunnel-Secret", worker_secret)
+    # Cloudflare's Browser Integrity Check on workers.dev rejects the default
+    # python-urllib User-Agent with "error code: 1010" before the request
+    # ever reaches the Worker. Present a normal browser UA instead.
+    req.add_header(
+        "User-Agent",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    )
+    req.add_header("Accept", "application/json")
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -835,11 +992,22 @@ def sync_to_worker(config, tunnel_url):
                 return False
     except urllib.error.HTTPError as e:
         log(f"Worker sync HTTP error: {e.code} {e.reason}", "ERROR")
+        err_text = f"{e.code} {e.reason}"
         try:
             err_body = e.read().decode("utf-8", "replace")
             log(f"  Worker error body: {err_body[:300]}", "ERROR")
+            err_text += " " + err_body
         except Exception:
             pass
+        log_diagnosis(err_text, None)
+        if e.code == 401:
+            log("  >> The Worker itself rejected the secret. Compare WORKER_SECRET in", "ERROR")
+            log("     the dataset config.env with the Worker's settings in Cloudflare.", "ERROR")
+        elif e.code == 404:
+            log("  >> The Worker exists but has no /update-tunnel route - wrong Worker", "ERROR")
+            log("     (is WORKER_URL pointing at the right deployment?).", "ERROR")
+        elif e.code == 403:
+            log("  >> Blocked before reaching the Worker (Cloudflare bot check).", "ERROR")
         return False
     except Exception as e:
         log(f"Worker sync failed: {e}", "ERROR")
@@ -1202,6 +1370,103 @@ def main():
             exported += 1
     log(f"Exported {exported} config keys into bot environment")
 
+    # ------------------------------------------------------------------
+    # Pre-flight: validate BOT_TOKEN and USER_SESSION_STRING directly
+    # against Telegram BEFORE starting the bot, so config problems are
+    # reported with a clear, actionable message instead of a bot crash.
+    # ------------------------------------------------------------------
+    try:
+        pf_script = os.path.join(WZMLX_DIR, "_preflight_check.py")
+        with open(pf_script, "w") as f:
+            f.write(
+                '''import asyncio, json, os, urllib.request
+
+def check_bot_token():
+    tok = (os.environ.get("BOT_TOKEN") or "").strip()
+    if not tok:
+        return {"status": "not_set"}
+    try:
+        with urllib.request.urlopen(
+            f"https://api.telegram.org/bot{tok}/getMe", timeout=20
+        ) as r:
+            data = json.loads(r.read().decode("utf-8", "replace"))
+            u = data.get("result", {}).get("username", "?")
+            return {"status": "ok", "bot": "@" + str(u)}
+    except Exception as e:
+        return {"status": "failed", "error": str(e)[:250]}
+
+async def check_session():
+    s = (os.environ.get("USER_SESSION_STRING") or "").strip()
+    if not s:
+        return {"status": "not_set"}
+    try:
+        from pyrogram import Client
+        api_id = int(os.environ.get("TELEGRAM_API", "0") or 0)
+        api_hash = os.environ.get("TELEGRAM_HASH", "")
+        c = Client(
+            "preflight",
+            api_id=api_id,
+            api_hash=api_hash,
+            session_string=s,
+            in_memory=True,
+        )
+        await c.start()
+        me = await c.get_me()
+        uname = "@" + me.username if me.username else str(me.id)
+        await c.stop()
+        return {"status": "ok", "user": uname}
+    except Exception as e:
+        return {"status": "failed", "error": str(e)[:250]}
+
+async def main():
+    out = {"bot_token": check_bot_token(), "user_session": await check_session()}
+    print("PREFLIGHT_JSON:" + json.dumps(out))
+
+asyncio.run(main())
+''')
+        pf = subprocess.run(
+            [sys.executable, pf_script],
+            env=env,
+            cwd=WZMLX_DIR,
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        pf_data = None
+        for line in (pf.stdout or "").splitlines():
+            if line.startswith("PREFLIGHT_JSON:"):
+                pf_data = json.loads(line[len("PREFLIGHT_JSON:"):])
+        if pf_data is None:
+            log(f"Pre-flight check did not produce a result: {(pf.stderr or pf.stdout or '')[:200]}", "WARN")
+        else:
+            bt = pf_data.get("bot_token", {})
+            us = pf_data.get("user_session", {})
+            if bt.get("status") == "ok":
+                log(f"Pre-flight: BOT_TOKEN valid ({bt.get('bot')})")
+            elif bt.get("status") == "not_set":
+                log("Pre-flight: BOT_TOKEN not set", "WARN")
+            else:
+                log(f"Pre-flight: BOT_TOKEN REJECTED by Telegram: {bt.get('error')}", "ERROR")
+                log_diagnosis(str(bt.get("error", "")), None)
+                if "Unauthor" in str(bt.get("error", "")):
+                    log("  >> The BOT_TOKEN in the dataset config.env is revoked or wrong.", "ERROR")
+                log("  -> The BOT_TOKEN in the dataset config.env is invalid. Get a fresh", "ERROR")
+                log("     token from @BotFather and update the dataset, then re-run.", "ERROR")
+            if us.get("status") == "ok":
+                log(f"Pre-flight: USER_SESSION_STRING valid ({us.get('user')})")
+            elif us.get("status") == "not_set":
+                log("Pre-flight: USER_SESSION_STRING not set (streaming via user client disabled)", "WARN")
+            else:
+                log(f"Pre-flight: USER_SESSION_STRING REJECTED by Telegram: {us.get('error')}", "ERROR")
+                log_diagnosis(str(us.get("error", "")), None)
+                log("  -> The string in the dataset config.env is stale/revoked.", "ERROR")
+                log("  -> Regenerate: send /exportsession to the running Actions bot", "ERROR")
+                log("     (sugarly), copy the NEW string from Saved Messages, replace", "ERROR")
+                log("     USER_SESSION_STRING in the Kaggle dataset config.env, save the", "ERROR")
+                log("     dataset, then re-run this workflow.", "ERROR")
+    except Exception as e:
+        log(f"Pre-flight check failed to run: {e}", "WARN")
+
     try:
         BOT_PROCESS = subprocess.Popen(
             [sys.executable, "-m", "bot"],
@@ -1215,11 +1480,17 @@ def main():
         bot_proc = BOT_PROCESS
         log(f"Bot process started (PID {bot_proc.pid})")
 
-        # Stream bot output to our log in real-time
+        # Stream bot output to our log in real-time, with live diagnosis
+        _diag_seen = set()
+        _bot_lines = []
         for line in bot_proc.stdout:
             line = line.rstrip()
             if line:
                 print(f"[bot] {line}", flush=True)
+                _bot_lines.append(line)
+                if any(s in line for s in ("ERROR", "Error", "Traceback", "Telegram says",
+                                           "ModuleNotFoundError", "Exception")):
+                    log_diagnosis(line, _diag_seen)
 
         # Wait for the process to finish
         exit_code = bot_proc.wait()
@@ -1230,6 +1501,20 @@ def main():
         else:
             notify(config, "crash", f"Bot crashed with exit code {exit_code}")
             log("Bot process crashed — check logs above", "ERROR")
+            # Show the tail of the crash and explain every known signature
+            tail = "\n".join(_bot_lines[-25:])
+            log("=" * 60)
+            log("CRASH ANALYSIS — last lines before exit:")
+            for _l in _bot_lines[-25:]:
+                if _l.strip():
+                    log(f"  {_l}")
+            log_diagnosis("\n".join(_bot_lines), None)
+            # Point at the final exception line explicitly
+            for _l in reversed(_bot_lines):
+                if _l.strip().endswith(("Error", "Exception")) or ": " in _l and _l.lstrip().startswith(("AttributeError", "RuntimeError", "ValueError", "KeyError", "TypeError")):
+                    log(f"Most likely crash point >> {_l.strip()}", "ERROR")
+                    break
+            log("=" * 60)
 
     except KeyboardInterrupt:
         log("Received KeyboardInterrupt — shutting down")
