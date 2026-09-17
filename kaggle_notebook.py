@@ -628,6 +628,71 @@ class MegaUploadOptions:
     except Exception as e:
         log(f"Failed to write mega stub: {e}", "ERROR")
 
+    # (a3) Install both shims into site-packages as well.
+    # The bot's self-restart (/restart command, private-file updates)
+    # spawns `python -m bot` with a working directory where the WZML-X
+    # folder is not importable, so `from wz_bin import bin_name` crashed
+    # the restarted process. Site-packages makes the shims global.
+    try:
+        import site as _site
+        _sp_dir = _site.getsitepackages()[0]
+        if os.path.isfile(shim_path):
+            shutil.copy2(shim_path, os.path.join(_sp_dir, "wz_bin.py"))
+        if os.path.isdir(mega_pkg_dir):
+            _sp_mega = os.path.join(_sp_dir, "mega")
+            os.makedirs(_sp_mega, exist_ok=True)
+            shutil.copy2(
+                os.path.join(mega_pkg_dir, "__init__.py"),
+                os.path.join(_sp_mega, "__init__.py"),
+            )
+        log(f"wz_bin + mega shims also installed into site-packages")
+    except Exception as e:
+        log(f"site-packages shim install failed (non-fatal): {e}", "WARN")
+
+    # (a4) deno JavaScript runtime for yt-dlp (EJS challenge solving).
+    # yt-dlp needs a JS runtime to solve YouTube signature/n challenges;
+    # without it formats go missing and downloads die with
+    # "The page needs to be reloaded". deno is a single static binary and
+    # is the runtime yt-dlp looks for by default.
+    try:
+        _deno_ok = subprocess.run(
+            ["deno", "--version"], capture_output=True, text=True
+        )
+        if _deno_ok.returncode == 0:
+            log("deno already installed for yt-dlp challenges")
+        else:
+            raise FileNotFoundError("deno present but not runnable")
+    except Exception:
+        try:
+            _deno_url = (
+                "https://github.com/denoland/deno/releases/latest/download/"
+                "deno-x86_64-unknown-linux-gnu.zip"
+            )
+            _req = urllib.request.Request(_deno_url)
+            with urllib.request.urlopen(_req, timeout=120) as _resp:
+                with open("/tmp/deno.zip", "wb") as _f:
+                    while True:
+                        _chunk = _resp.read(65536)
+                        if not _chunk:
+                            break
+                        _f.write(_chunk)
+            import zipfile as _zf
+            with _zf.ZipFile("/tmp/deno.zip") as _z:
+                _z.extractall("/tmp/deno_bin")
+            _installed = False
+            for _cand in ("/usr/local/bin", "/usr/bin",
+                          os.path.expanduser("~/.local/bin")):
+                if os.path.isdir(_cand) and os.access(_cand, os.W_OK):
+                    shutil.copy2("/tmp/deno_bin/deno", os.path.join(_cand, "deno"))
+                    os.chmod(os.path.join(_cand, "deno"), 0o755)
+                    log(f"deno installed to {_cand} (yt-dlp JS challenges enabled)")
+                    _installed = True
+                    break
+            if not _installed:
+                log("no writable bin dir for deno", "WARN")
+        except Exception as e:
+            log(f"deno install failed (yt-dlp challenges may fail): {e}", "WARN")
+
     # (b) aria2c RPC daemon on :6800
     if _port_open("127.0.0.1", 6800):
         log("aria2c RPC daemon already listening on :6800")
@@ -1167,6 +1232,97 @@ def self_termination_timer():
 
 
 # ============================================================================
+# SECTION 11.5 — SESSION LOCK (single active instance per notebook)
+# ============================================================================
+# Kaggle does not expose a public API to stop a previous session of a kernel,
+# and two simultaneous sessions would run two bots on the same tokens
+# (Telegram update-stealing conflicts). Instead we use a lease in the shared
+# MongoDB: every session generates its own ID, claims the lock document, and
+# a background thread verifies ownership every 45 seconds. When a NEWER
+# session claims the lock, any older session of this notebook detects it and
+# terminates itself gracefully. This keeps exactly one bot running at any time.
+
+SESSION_ID = f"{int(time.time())}-{random.randint(100000, 999999)}"
+_SESSION_LOCK_DB = "wzml_kaggle"
+_SESSION_LOCK_COL = "session_lock"
+
+
+def acquire_session_lock(database_url):
+    """Claim the session lock document in MongoDB. Returns True if claimed."""
+    if not database_url:
+        log("Session lock: no DATABASE_URL — duplicate-session protection disabled", "WARN")
+        return False
+    try:
+        from pymongo import MongoClient
+        client = MongoClient(database_url, serverSelectionTimeoutMS=15000)
+        col = client[_SESSION_LOCK_DB][_SESSION_LOCK_COL]
+        col.replace_one(
+            {"_id": "lock"},
+            {"_id": "lock", "owner": SESSION_ID, "ts": int(time.time())},
+            upsert=True,
+        )
+        client.close()
+        log(f"Session lock claimed ({SESSION_ID}) — older sessions of this notebook will terminate")
+        return True
+    except Exception as e:
+        log(f"Session lock: could not claim ({e}) — continuing without it", "WARN")
+        return False
+
+
+def session_lock_monitor(config):
+    """
+    Background thread: verify every 45s that this session still owns the lock.
+    If a newer session has taken over, shut this session down gracefully.
+    Requires 3 consecutive mismatches before acting (tolerates transient DB
+    errors) and never terminates while the DB is merely unreachable.
+    """
+    database_url = config.get("DATABASE_URL", "")
+    mismatches = 0
+    while not SHUTDOWN_EVENT.is_set():
+        time.sleep(45)
+        if SHUTDOWN_EVENT.is_set():
+            return
+        try:
+            from pymongo import MongoClient
+            client = MongoClient(database_url, serverSelectionTimeoutMS=15000)
+            doc = client[_SESSION_LOCK_DB][_SESSION_LOCK_COL].find_one({"_id": "lock"})
+            client.close()
+        except Exception:
+            # DB unreachable — do NOT kill the bot on a transient outage
+            mismatches = 0
+            continue
+        if doc is not None and doc.get("owner") != SESSION_ID:
+            mismatches += 1
+            log(f"Session lock: newer session detected ({mismatches}/3) — {doc.get('owner')}", "WARN")
+            if mismatches >= 3:
+                log("=" * 60)
+                log("A newer session of this notebook has started — terminating this")
+                log("one so only a single bot instance runs. No action needed.")
+                log("=" * 60)
+                try:
+                    if BOT_PROCESS is not None and BOT_PROCESS.poll() is None:
+                        BOT_PROCESS.send_signal(signal.SIGINT)
+                        try:
+                            BOT_PROCESS.wait(timeout=30)
+                        except subprocess.TimeoutExpired:
+                            BOT_PROCESS.terminate()
+                            try:
+                                BOT_PROCESS.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                BOT_PROCESS.kill()
+                except Exception:
+                    pass
+                SHUTDOWN_EVENT.set()
+                try:
+                    notify(config, "stop", "New session started — this session terminated (single-instance lock)")
+                except Exception:
+                    pass
+                os._exit(0)
+        else:
+            mismatches = 0
+
+
+# ============================================================================
 # SECTION 12 — SIGNAL HANDLERS
 # ============================================================================
 
@@ -1336,8 +1492,15 @@ def main():
             notify(config, "stream_ready", "Tunnel setup failed — running without web UI")
 
     # ------------------------------------------------------------------
-    # Step 7: Start the self-termination timer (background thread)
+    # Step 7: Claim the session lock + start the self-termination timer
     # ------------------------------------------------------------------
+    if acquire_session_lock(config.get("DATABASE_URL", "")):
+        lock_thread = threading.Thread(
+            target=session_lock_monitor,
+            args=(config,),
+            daemon=True,
+        )
+        lock_thread.start()
     timer_thread = threading.Thread(target=self_termination_timer, daemon=True)
     timer_thread.start()
 
