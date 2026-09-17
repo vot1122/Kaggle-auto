@@ -36,6 +36,7 @@ import time
 import random
 import signal
 import shutil
+import socket
 import base64
 import subprocess
 import urllib.request
@@ -188,12 +189,14 @@ def send_ntfy(topic, title, message, tags=None):
         log("ntfy: missing topic, skipping", "WARN")
         return False
     url = f"https://ntfy.sh/{topic}"
+    # HTTP headers must be latin-1 safe (em dash in titles crashes urllib)
+    safe_title = title.encode("latin-1", "replace").decode("latin-1")
     headers = {
-        "Title": title,
+        "Title": safe_title,
         "Priority": "default",
     }
     if tags:
-        headers["Tags"] = tags
+        headers["Tags"] = tags.encode("latin-1", "replace").decode("latin-1")
     data = message.encode("utf-8")
     req = urllib.request.Request(url, data=data, method="POST")
     for k, v in headers.items():
@@ -446,6 +449,105 @@ def apply_sed_patches():
 # SECTION 6 — SYSTEM PACKAGES & PYTHON DEPS
 # ============================================================================
 
+def _port_open(host, port, timeout=3):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def setup_wzml_services(config):
+    """
+    Provide what the WZML-X Docker base image normally supplies:
+
+    1. `wz_bin` module: config_manager does `from wz_bin import bin_name`.
+       In Docker it is a compiled helper baked into the base image
+       (mysterysd/wzmlx:wzadv). On Kaggle we write a pure-Python shim
+       with the standard binary names.
+    2. An aria2c RPC daemon on localhost:6800 (same flags as the
+       upstream setpkgs.sh). Without it TorrentManager.initiate()
+       raises and the bot exits.
+    3. qbittorrent-nox availability check (spawned via BinConfig.QBIT_NAME;
+       its profile comes from the repo's configs/qbittorrent/).
+    """
+    log("=" * 60)
+    log("Setting up WZML-X service prerequisites")
+    log("=" * 60)
+
+    # (a) wz_bin shim
+    shim_path = os.path.join(WZMLX_DIR, "wz_bin.py")
+    try:
+        with open(shim_path, "w") as f:
+            f.write(
+                "def bin_name(i):\n"
+                '    names = ["aria2c", "qbittorrent-nox", "ffmpeg", "rclone", "sabnzbd"]\n'
+                "    return names[i] if isinstance(i, int) and 0 <= i < len(names) else names[0]\n"
+            )
+        log("wz_bin.py shim written (aria2c/qbittorrent-nox/ffmpeg/rclone/sabnzbd)")
+    except Exception as e:
+        log(f"Failed to write wz_bin shim: {e}", "ERROR")
+
+    # (b) aria2c RPC daemon on :6800
+    if _port_open("127.0.0.1", 6800):
+        log("aria2c RPC daemon already listening on :6800")
+    else:
+        dl_dir = config.get("DOWNLOAD_DIR", "") or DOWNLOAD_DIR_DEFAULT
+        if not dl_dir.endswith("/"):
+            dl_dir += "/"
+        cmd = [
+            "aria2c",
+            "--daemon=true",
+            "--enable-rpc=true",
+            "--rpc-listen-all=true",
+            "--rpc-max-request-size=1024M",
+            "--max-concurrent-downloads=1000",
+            "--max-connection-per-server=16",
+            "--split=16",
+            "--min-split-size=32M",
+            "--optimize-concurrent-downloads=true",
+            "--continue=true",
+            "--auto-file-renaming=true",
+            "--allow-overwrite=true",
+            "--force-save=false",
+            "--content-disposition-default-utf8=true",
+            "--user-agent=Wget/1.12",
+            "--http-accept-gzip=true",
+            "--max-tries=20",
+            "--max-file-not-found=0",
+            f"--dir={dl_dir}",
+        ]
+        try:
+            trackers = subprocess.run(
+                [
+                    "curl", "-Ns", "--max-time", "20",
+                    "https://cdn.jsdelivr.net/gh/ngosang/trackerslist@master/trackers_all.txt",
+                ],
+                capture_output=True, text=True, timeout=30,
+            )
+            if trackers.returncode == 0 and trackers.stdout.strip():
+                tlist = ",".join(trackers.stdout.split())[:4000]
+                if tlist:
+                    cmd.append(f"--bt-trackers={tlist}")
+        except Exception:
+            pass
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if _port_open("127.0.0.1", 6800):
+                log("aria2c RPC daemon started on :6800")
+            else:
+                msg = (r.stderr or r.stdout or "").strip()[:300]
+                log(f"aria2c daemon not reachable (rc={r.returncode}): {msg}", "WARN")
+        except Exception as e:
+            log(f"aria2c daemon failed to start: {e}", "ERROR")
+
+    # (c) qbittorrent-nox check
+    if shutil.which("qbittorrent-nox"):
+        log("qbittorrent-nox available")
+    else:
+        log("qbittorrent-nox MISSING - qBittorrent downloads will fail", "WARN")
+
+
 def install_system_packages():
     """
     Install system packages required by WZML-X on Kaggle.
@@ -462,6 +564,7 @@ def install_system_packages():
     packages = [
         "aria2", "ffmpeg", "mediainfo", "p7zip-full", "p7zip-rar",
         "rar", "unrar", "zip", "unzip", "wget", "curl", "jq",
+        "qbittorrent-nox", "rclone",
     ]
 
     # Check which are already installed
@@ -505,7 +608,7 @@ def install_system_packages():
         _install_via_conda(missing)
 
     # Verify critical binaries
-    for pkg in ["ffmpeg", "aria2c", "7z", "jq"]:
+    for pkg in ["ffmpeg", "aria2c", "7z", "jq", "qbittorrent-nox", "rclone"]:
         if shutil.which(pkg):
             log(f"  OK: {pkg} on PATH")
         else:
@@ -1019,6 +1122,7 @@ def main():
     # ------------------------------------------------------------------
     install_system_packages()
     install_python_deps()
+    setup_wzml_services(config)
 
     # ------------------------------------------------------------------
     # Step 6: Download cloudflared and start tunnel
