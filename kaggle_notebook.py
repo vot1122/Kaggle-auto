@@ -680,12 +680,6 @@ def apply_userrepo_patches():
         with open(ss_path, "r", encoding="utf-8") as f:
             ss = f.read()
         changed = False
-        if "if use_user and not _us_check_auth(request):" in ss:
-            ss = ss.replace(
-                "if use_user and not _us_check_auth(request):",
-                "if not _us_check_auth(request):",
-            )
-            changed = True
         if "user stream requires authentication" in ss:
             ss = ss.replace(
                 "user stream requires authentication",
@@ -700,9 +694,11 @@ def apply_userrepo_patches():
             ss = ss.replace(
                 serve_anchor,
                 "async def _serve(request, kind):\n"
-                "    # KAGGLE_AUTH_GATE: require the stream password (only when\n"
-                "    # STREAM_PASS is set) before serving any file bytes\n"
-                "    if not _us_check_auth(request):\n"
+                "    # KAGGLE_AUTH_GATE: user-account streams (?user=1) require\n"
+                "    # the stream password (only when STREAM_PASS is set).\n"
+                "    # Bot-account streams stay open — password is a\n"
+                "    # user-account feature only.\n"
+                "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
                 "        raise web.HTTPUnauthorized(\n"
                 "            text=\"authenticate first\",\n"
                 "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
@@ -719,23 +715,12 @@ def apply_userrepo_patches():
     except Exception as e:
         log(f"  auth gate: FAILED — {e}", "ERROR")
 
-    # Kaggle addition B — "Authenticate first" banner in stream.html
-    html_path = os.path.join(WZMLX_DIR, html_rel)
-    try:
-        with open(html_path, "r", encoding="utf-8") as f:
-            h = f.read()
-        if "wzml-auth-gate" not in h:
-            if "</head>" in h:
-                h = h.replace("</head>", AUTH_BANNER_HTML + "\n</head>", 1)
-            else:
-                h = h + AUTH_BANNER_HTML
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(h)
-            log("  auth banner: injected into stream.html")
-        else:
-            log("  auth banner: already present")
-    except Exception as e:
-        log(f"  auth banner: FAILED — {e}", "ERROR")
+    # Kaggle addition B — (v15.6) RETIRED: the kit password modal
+    # (stall_ui.js "Stream Password" overlay, shown automatically when a
+    # user-account stream returns 401) is the single auth UI. Our banner
+    # duplicated it, appeared on bot-account streams, and stored the token
+    # in a different format under the same localStorage key.
+    log("  auth banner: retired in v15.6 — kit password overlay is authoritative")
 
     # Kaggle addition C — v15.1 aesthetic overhaul: completely restyled design
     # (new typography, animated aurora backdrop, glass chrome, cinematic
@@ -843,7 +828,8 @@ def apply_userrepo_patches():
                 )
                 css_fix = (
                     '<style id="wzml-bootprobe-style">'
-                    'body:has(#wzml-auth-gate) .stall{display:none !important}'
+                    'body:has(#wzml-auth-gate) .stall,'
+                    'body:has(#wzml-auth-overlay) .stall{display:none !important}'
                     '</style>\n'
                 )
                 n_changes = 0
@@ -984,6 +970,113 @@ def apply_userrepo_patches():
                 log("  telemetry: already present in stream_server.py")
         except Exception as e:
             log(f"  telemetry: FAILED — {e}", "ERROR")
+
+    # Kaggle addition H — v15.6 live-password auth bridge.
+    # wserver is a separate process: it reads env/config.env at startup and
+    # NEVER sees /bs-saved STREAM_PASS, so /api/stream_auth kept answering
+    # "STREAM_PASS not set" (correct passwords rejected) while the bot-side
+    # gate enforced the password anyway. Fix: an internal /_auth route on
+    # the bot stream server (which holds the LIVE config and sees /bs
+    # changes instantly) checks passwords and mints tokens; wserver
+    # /api/stream_auth becomes a thin proxy to it.
+    ok_h = 0
+    ss2_path = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+    try:
+        with open(ss2_path, "r", encoding="utf-8") as f:
+            s2 = f.read()
+        if "_ks_auth_api" not in s2:
+            imp_old = "    check_auth as _us_check_auth,\n"
+            imp_new = (
+                "    check_auth as _us_check_auth,\n"
+                "    _get_stream_pass as _us_get_pass,\n"
+                "    _sign_token as _us_sign,\n"
+            )
+            if imp_old in s2:
+                s2 = s2.replace(imp_old, imp_new, 1)
+                ok_h += 1
+            auth_fn = (
+                "async def _ks_auth_api(request):\n"
+                "    try:\n"
+                "        body = await request.json()\n"
+                "    except Exception:\n"
+                "        body = {}\n"
+                "    import hmac as _ks_hmac\n"
+                "    password = _us_get_pass()\n"
+                "    if not password:\n"
+                "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+                "    submitted = body.get(\"password\", \"\")\n"
+                "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+                "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+                "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})\n"
+                "\n"
+                "\n"
+                "async def _ping(_):"
+            )
+            if "async def _ks_auth_api" not in s2 and "async def _ping(_):" in s2:
+                s2 = s2.replace("async def _ping(_):", auth_fn, 1)
+            if 'app.router.add_route("GET", "/_ping", _ping)' in s2:
+                s2 = s2.replace(
+                    'app.router.add_route("GET", "/_ping", _ping)',
+                    'app.router.add_route("GET", "/_ping", _ping)\n'
+                    '    app.router.add_route("POST", "/_auth", _ks_auth_api)',
+                    1,
+                )
+                ok_h += 1
+            with open(ss2_path, "w", encoding="utf-8") as f:
+                f.write(s2)
+    except Exception as e:
+        log(f"  auth bridge (bot): FAILED — {e}", "ERROR")
+
+    ws_path = os.path.join(WZMLX_DIR, "web/wserver.py")
+    try:
+        with open(ws_path, "r", encoding="utf-8") as f:
+            ws = f.read()
+        if "KAGGLE_AUTH_PROXY" not in ws:
+            route_old = (
+                '@app.post("/api/stream_auth")\n'
+                'async def stream_auth_endpoint(request: Request):\n'
+                '    try:\n'
+                '        body = await request.json()\n'
+                '    except Exception:\n'
+                '        body = {}\n'
+                '    password = _us_get_pass()\n'
+                '    if not password:\n'
+                '        return JSONResponse({"error": "STREAM_PASS not set"}, status_code=200)\n'
+                '    submitted = body.get("password", "")\n'
+                '    if not submitted or not _us_hmac.compare_digest(submitted, password):\n'
+                '        return JSONResponse({"error": "wrong password"}, status_code=401)\n'
+                '    token = _us_sign(password)\n'
+                '    return JSONResponse({"token": token, "expires": 86400})'
+            )
+            route_new = (
+                '@app.post("/api/stream_auth")\n'
+                'async def stream_auth_endpoint(request: Request):  # KAGGLE_AUTH_PROXY\n'
+                '    # The live STREAM_PASS lives in the bot process (it sees /bs\n'
+                '    # changes instantly); wserver only sees its own startup env,\n'
+                '    # so passwords set via /bs were invisible here. Proxy to the\n'
+                '    # internal /_auth route — one source of truth.\n'
+                '    try:\n'
+                '        body = await request.json()\n'
+                '    except Exception:\n'
+                '        body = {}\n'
+                '    try:\n'
+                '        async with http_session.post(f"{STREAM_BASE}/_auth", json=body) as upstream:\n'
+                '            data = await upstream.json()\n'
+                '            return JSONResponse(data, status_code=upstream.status)\n'
+                '    except Exception as e:\n'
+                '        return JSONResponse(\n'
+                '            {"error": f"stream auth unavailable: {e.__class__.__name__}"},\n'
+                '            status_code=503,\n'
+                '        )'
+            )
+            if route_old in ws:
+                ws = ws.replace(route_old, route_new, 1)
+                ok_h += 1
+                with open(ws_path, "w", encoding="utf-8") as f:
+                    f.write(ws)
+    except Exception as e:
+        log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
+    log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
     log("WZML-X-Bot patch kit applied")
     return True
