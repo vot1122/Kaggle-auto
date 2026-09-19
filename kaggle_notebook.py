@@ -3991,6 +3991,68 @@ def apply_userrepo_patches():
             log("  r2: qbit hold-release already applied")
     except Exception as e:
         log(f"  r2: qbit listener patch FAILED — {e}", "ERROR")
+
+    # J-12: owner/sudo tasks never reach the quota hook (the sudo branch
+    # above it returns early), so the exempt log must live INSIDE that
+    # branch — otherwise exempt tasks are invisible in the logs group.
+    try:
+        tm_path = os.path.join(WZMLX_DIR, "bot/helper/ext_utils/task_manager.py")
+        with open(tm_path, "r", encoding="utf-8") as f:
+            tm = f.read()
+        if "WZFIX exempt task log" not in tm:
+            mark = '    if await CustomFilters.sudo("", message):\n'
+            add = (
+                mark
+                + '        # WZFIX exempt task log: owner/sudo never reach the\n'
+                + '        # quota hook below, so log the exemption right here\n'
+                + '        try:\n'
+                + '            from ..wzfix.r1_core import admin_log\n'
+                + '\n'
+                + '            _fu = getattr(message, "from_user", None) or getattr(\n'
+                + '                message, "sender_chat", None\n'
+                + '            )\n'
+                + '            _ch = getattr(message, "chat", None)\n'
+                + '            _ct = str(getattr(_ch, "type", ""))\n'
+                + '            try:\n'
+                + '                _ct = _ct.split(".")[-1]\n'
+                + '            except Exception:\n'
+                + '                pass\n'
+                + '            _cn = str(\n'
+                + '                getattr(_ch, "title", None)\n'
+                + '                or getattr(_ch, "username", None)\n'
+                + '                or ""\n'
+                + '            )\n'
+                + '            _who = f"<code>{_fu.id if _fu else 0}</code>"\n'
+                + '            _un = getattr(_fu, "username", None) if _fu else None\n'
+                + '            if _un:\n'
+                + '                _who += f" (@{_un})"\n'
+                + '            await admin_log(\n'
+                + '                "\\U0001F451 <b>Exempt task — no quota check</b>",\n'
+                + '                f"┏ <b>User</b> → {_who}\\n"\n'
+                + '                f"┠ <b>Where</b> → {_ct} {_cn[:60]}\\n"\n'
+                + '                f"┖ Owner/sudo are exempt by design",\n'
+                + '            )\n'
+                + '        except Exception:\n'
+                + '            pass\n'
+            )
+            if mark in tm:
+                tm = tm.replace(mark, add, 1)
+                with open(tm_path, "w", encoding="utf-8") as f:
+                    f.write(tm)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", tm_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r2: exempt tasks now logged in the sudo branch")
+                else:
+                    log(f"  r2: exempt log compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: sudo branch anchor not found", "WARN")
+        else:
+            log("  r2: exempt task log already applied")
+    except Exception as e:
+        log(f"  r2: exempt log patch FAILED — {e}", "ERROR")
     log("WZML-X-Bot patch kit applied")
     return True
 
