@@ -4118,6 +4118,117 @@ def apply_userrepo_patches():
             log("  r2: ytdl quota block already applied")
     except Exception as e:
         log(f"  r2: ytdl patch FAILED — {e}", "ERROR")
+
+    # J-14: sabnzbdapi must survive ANY niquests version. Kaggle base
+    # images can carry a preinstalled niquests without the vendored
+    # `packages` submodule — the bot crashed at import on exactly that
+    # (ModuleNotFoundError: niquests.packages). Fall back to plain
+    # urllib3, then to a no-op, so the bot starts regardless.
+    try:
+        sb_path = os.path.join(WZMLX_DIR, "sabnzbdapi", "requests.py")
+        with open(sb_path, "r", encoding="utf-8") as f:
+            sb = f.read()
+        if "WZFIX niquests compat" not in sb:
+            old_sb = (
+                "from niquests.packages.urllib3 import disable_warnings\n"
+                "from niquests.packages.urllib3.exceptions import InsecureRequestWarning\n"
+            )
+            new_sb = (
+                "# WZFIX niquests compat: some niquests builds do not\n"
+                "# vendor the packages submodule — fall back to urllib3\n"
+                "try:\n"
+                "    from niquests.packages.urllib3 import disable_warnings\n"
+                "    from niquests.packages.urllib3.exceptions import InsecureRequestWarning\n"
+                "except ImportError:\n"
+                "    try:\n"
+                "        from urllib3 import disable_warnings\n"
+                "        from urllib3.exceptions import InsecureRequestWarning\n"
+                "    except ImportError:\n"
+                "        def disable_warnings(*_a, **_k):\n"
+                "            pass\n"
+                "\n"
+                "        class InsecureRequestWarning(Warning):\n"
+                "            pass\n"
+            )
+            if old_sb in sb:
+                sb = sb.replace(old_sb, new_sb, 1)
+                with open(sb_path, "w", encoding="utf-8") as f:
+                    f.write(sb)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", sb_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r2: sabnzbdapi niquests-compat patched")
+                else:
+                    log(f"  r2: niquests compat compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: sabnzbdapi anchor not found", "WARN")
+        else:
+            log("  r2: niquests compat already applied")
+    except Exception as e:
+        log(f"  r2: niquests compat patch FAILED — {e}", "ERROR")
+
+    # J-14b: two more files import niquests.packages directly —
+    # shortener_utils.py and direct_link_generator.py — patch them too
+    try:
+        su_path = os.path.join(
+            WZMLX_DIR, "bot/helper/ext_utils/shortener_utils.py"
+        )
+        with open(su_path, "r", encoding="utf-8") as f:
+            su = f.read()
+        if "WZFIX niquests compat" not in su:
+            old_su = "from niquests.packages.urllib3 import disable_warnings\n"
+            new_su = (
+                "# WZFIX niquests compat\n"
+                "try:\n"
+                "    from niquests.packages.urllib3 import disable_warnings\n"
+                "except ImportError:\n"
+                "    try:\n"
+                "        from urllib3 import disable_warnings\n"
+                "    except ImportError:\n"
+                "        def disable_warnings(*_a, **_k):\n"
+                "            pass\n"
+            )
+            if old_su in su:
+                su = su.replace(old_su, new_su, 1)
+                with open(su_path, "w", encoding="utf-8") as f:
+                    f.write(su)
+                log("  r2: shortener_utils niquests-compat patched")
+            else:
+                log("  r2: shortener_utils anchor not found", "WARN")
+        else:
+            log("  r2: shortener_utils already compatible")
+    except Exception as e:
+        log(f"  r2: shortener_utils patch FAILED — {e}", "ERROR")
+
+    try:
+        dl_path = os.path.join(
+            WZMLX_DIR,
+            "bot/helper/mirror_leech_utils/download_utils/direct_link_generator.py",
+        )
+        with open(dl_path, "r", encoding="utf-8") as f:
+            dl = f.read()
+        if "WZFIX niquests compat" not in dl:
+            old_dl = "from niquests.packages.urllib3.util.retry import Retry\n"
+            new_dl = (
+                "# WZFIX niquests compat\n"
+                "try:\n"
+                "    from niquests.packages.urllib3.util.retry import Retry\n"
+                "except ImportError:\n"
+                "    from urllib3.util.retry import Retry\n"
+            )
+            if old_dl in dl:
+                dl = dl.replace(old_dl, new_dl, 1)
+                with open(dl_path, "w", encoding="utf-8") as f:
+                    f.write(dl)
+                log("  r2: direct_link_generator niquests-compat patched")
+            else:
+                log("  r2: direct_link_generator anchor not found", "WARN")
+        else:
+            log("  r2: direct_link_generator already compatible")
+    except Exception as e:
+        log(f"  r2: direct_link_generator patch FAILED — {e}", "ERROR")
     log("WZML-X-Bot patch kit applied")
     return True
 
@@ -5264,6 +5375,29 @@ def main():
     # ------------------------------------------------------------------
     install_system_packages()
     install_python_deps()
+
+    # WZFIX niquests guard: Kaggle base images may ship a preinstalled
+    # niquests without the vendored `packages` submodule; pip then says
+    # "already satisfied" and never upgrades it — the bot crashed on
+    # exactly that. Verify and force-reinstall when broken.
+    try:
+        import importlib.util as _ilu
+
+        _ilu.invalidate_caches()
+        if _ilu.find_spec("niquests.packages") is None:
+            log("niquests.packages missing — forcing reinstall", "WARN")
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install",
+                 "--upgrade", "--force-reinstall", "--no-deps", "niquests"],
+                capture_output=True, text=True, timeout=300,
+            )
+            _ilu.invalidate_caches()
+            if _ilu.find_spec("niquests.packages") is None:
+                log("niquests still broken — sabnzbdapi fallback will carry it", "WARN")
+            else:
+                log("niquests fixed by forced reinstall")
+    except Exception as _nq_e:
+        log(f"niquests guard failed: {_nq_e}", "WARN")
     setup_wzml_services(config)
 
     # ------------------------------------------------------------------
