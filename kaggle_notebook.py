@@ -3786,6 +3786,211 @@ def apply_userrepo_patches():
             log(f"  r2: bot_settings compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
     except Exception as e:
         log(f"  r2: ALLOWANCE_OWNER /bs patch FAILED — {e}", "ERROR")
+
+    # J-10: telegram + nzb downloads must pass the bandwidth check too —
+    # they never touch aria2c, so the callback backstop cannot see them.
+    try:
+        tg_path = os.path.join(
+            WZMLX_DIR,
+            "bot/helper/mirror_leech_utils/download_utils/telegram_download.py",
+        )
+        with open(tg_path, "r", encoding="utf-8") as f:
+            tg = f.read()
+        if "WZFIX tg limit check" not in tg:
+            mark = "        if media is not None:\n"
+            add = (
+                mark
+                + "            # WZFIX tg limit check: telegram files never touch\n"
+                + "            # aria2c, so the callback backstop cannot see them.\n"
+                + "            # The exact size is known from the media itself.\n"
+                + "            try:\n"
+                + "                if not self._listener.size and getattr(media, \"file_size\", 0):\n"
+                + "                    self._listener.size = media.file_size\n"
+                + "                from ...ext_utils.task_manager import limit_checker\n"
+                + "                _wz = await limit_checker(self._listener)\n"
+                + "                if _wz:\n"
+                + "                    if _wz.startswith(\"\\U0001F6AB\"):\n"
+                + "                        from contextlib import suppress as _wzsup\n"
+                + "                        from ...telegram_helper.message_utils import send_message\n"
+                + "                        with _wzsup(Exception):\n"
+                + "                            await send_message(self._listener.message, _wz)\n"
+                + "                        return\n"
+                + "                    await self._listener.on_download_error(_wz, is_limit=True)\n"
+                + "                    return\n"
+                + "            except Exception as _wz_e:\n"
+                + "                LOGGER.error(f\"WZFIX tg limit check failed (allowed): {_wz_e}\")\n"
+            )
+            if mark in tg:
+                tg = tg.replace(mark, add, 1)
+                with open(tg_path, "w", encoding="utf-8") as f:
+                    f.write(tg)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", tg_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r2: telegram downloads now bandwidth-checked")
+                else:
+                    log(f"  r2: tg patch compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: telegram anchor not found", "WARN")
+        else:
+            log("  r2: tg limit check already applied")
+    except Exception as e:
+        log(f"  r2: tg patch FAILED — {e}", "ERROR")
+
+    try:
+        nzb_path = os.path.join(
+            WZMLX_DIR,
+            "bot/helper/mirror_leech_utils/download_utils/nzb_downloader.py",
+        )
+        with open(nzb_path, "r", encoding="utf-8") as f:
+            nz = f.read()
+        if "WZFIX nzb limit check" not in nz:
+            mark = "    use_par2_lock = listener.extract and sab_par2_lock.throttled\n"
+            add = (
+                "    # WZFIX nzb limit check: nzb never touches aria2c\n"
+                "    try:\n"
+                "        from ...ext_utils.task_manager import limit_checker\n"
+                "        _wz = await limit_checker(listener)\n"
+                "        if _wz:\n"
+                "            if _wz.startswith(\"\\U0001F6AB\"):\n"
+                "                from contextlib import suppress as _wzsup\n"
+                "                from ...telegram_helper.message_utils import send_message\n"
+                "                with _wzsup(Exception):\n"
+                "                    await send_message(listener.message, _wz)\n"
+                "                return\n"
+                "            await listener.on_download_error(_wz, is_limit=True)\n"
+                "            return\n"
+                "    except Exception as _wz_e:\n"
+                "        LOGGER.error(f\"WZFIX nzb limit check failed (allowed): {_wz_e}\")\n"
+                + mark
+            )
+            if mark in nz:
+                nz = nz.replace(mark, add, 1)
+                with open(nzb_path, "w", encoding="utf-8") as f:
+                    f.write(nz)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", nzb_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r2: nzb downloads now bandwidth-checked")
+                else:
+                    log(f"  r2: nzb patch compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: nzb anchor not found", "WARN")
+        else:
+            log("  r2: nzb limit check already applied")
+    except Exception as e:
+        log(f"  r2: nzb patch FAILED — {e}", "ERROR")
+
+    # J-11: qbit torrents get the same treatment as aria2 — born held at
+    # 1 KB/s until the size check releases or removes them.
+    try:
+        qb_path = os.path.join(
+            WZMLX_DIR,
+            "bot/helper/mirror_leech_utils/download_utils/qbit_download.py",
+        )
+        with open(qb_path, "r", encoding="utf-8") as f:
+            qb = f.read()
+        if "WZFIX qbit hold" not in qb:
+            mark = "        tor_info = tor_info[0]\n        listener.name = tor_info.name\n"
+            add = (
+                "        tor_info = tor_info[0]\n"
+                "        # WZFIX qbit hold: cap the torrent at 1 KB/s until the\n"
+                "        # size check releases it (or removes it) — bandwidth cannot leak\n"
+                "        try:\n"
+                "            await TorrentManager.qbittorrent.torrents.set_download_limit(\n"
+                "                [tor_info.hash], 1024\n"
+                "            )\n"
+                "        except Exception as _wz_e:\n"
+                "            LOGGER.error(f\"WZFIX qbit hold failed: {_wz_e}\")\n"
+                "        listener.name = tor_info.name\n"
+            )
+            if mark in qb:
+                qb = qb.replace(mark, add, 1)
+                with open(qb_path, "w", encoding="utf-8") as f:
+                    f.write(qb)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", qb_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r2: qbit torrents born held at 1 KB/s")
+                else:
+                    log(f"  r2: qbit hold compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: qbit add anchor not found", "WARN")
+        else:
+            log("  r2: qbit hold already applied")
+    except Exception as e:
+        log(f"  r2: qbit hold patch FAILED — {e}", "ERROR")
+
+    try:
+        ql_path = os.path.join(WZMLX_DIR, "bot/helper/listeners/qbit_listener.py")
+        with open(ql_path, "r", encoding="utf-8") as f:
+            ql = f.read()
+        if "WZFIX qbit hold-release" not in ql:
+            old_sc = (
+                "        task.listener.size = tor.size\n"
+                "        mmsg = await limit_checker(task.listener)\n"
+                "        if mmsg:\n"
+                "            await _on_download_error(mmsg, tor, is_limit=True)\n"
+            )
+            new_sc = (
+                "        task.listener.size = tor.size\n"
+                "        mmsg = await limit_checker(task.listener)\n"
+                "        if mmsg:\n"
+                "            if mmsg.startswith(\"\\U0001F6AB\"):  # WZFIX qbit hold-release: quota block\n"
+                "                # silent removal — pop the task FIRST so the\n"
+                "                # WZML error card never fires, then ONE message\n"
+                "                from contextlib import suppress as _wzsup\n"
+                "                try:\n"
+                "                    async with task_dict_lock:\n"
+                "                        task_dict.pop(task.listener.mid, None)\n"
+                "                except Exception:\n"
+                "                    pass\n"
+                "                with _wzsup(Exception):\n"
+                "                    from ..telegram_helper.message_utils import send_message, delete_message\n"
+                "                    await send_message(task.listener.message, mmsg)\n"
+                "                with _wzsup(Exception):\n"
+                "                    await delete_message(task.listener.message)\n"
+                "                with _wzsup(Exception):\n"
+                "                    await TorrentManager.qbittorrent.torrents.stop([tor.hash])\n"
+                "                    await sleep(0.3)\n"
+                "                    await _remove_torrent(tor.hash, tor.tags[0])\n"
+                "                with _wzsup(Exception):\n"
+                "                    from ..ext_utils.task_manager import start_from_queued\n"
+                "                    await start_from_queued()\n"
+                "                return\n"
+                "            await _on_download_error(mmsg, tor, is_limit=True)\n"
+                "            return\n"
+                "        # WZFIX qbit hold-release: uncap the checked torrent\n"
+                "        from contextlib import suppress as _wzsup2\n"
+                "        with _wzsup2(Exception):\n"
+                "            await TorrentManager.qbittorrent.torrents.set_download_limit(\n"
+                "                [tor.hash], 0\n"
+                "            )\n"
+            )
+            if old_sc in ql:
+                ql = ql.replace(old_sc, new_sc, 1)
+                with open(ql_path, "w", encoding="utf-8") as f:
+                    f.write(ql)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", ql_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r2: qbit hold-release + clean block flow patched")
+                else:
+                    log(f"  r2: qbit listener compile FAILED — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: qbit _size_check anchor not found", "WARN")
+        else:
+            log("  r2: qbit hold-release already applied")
+    except Exception as e:
+        log(f"  r2: qbit listener patch FAILED — {e}", "ERROR")
     log("WZML-X-Bot patch kit applied")
     return True
 
