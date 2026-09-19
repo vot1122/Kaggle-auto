@@ -5376,26 +5376,60 @@ def main():
     install_system_packages()
     install_python_deps()
 
-    # WZFIX niquests guard: Kaggle base images may ship a preinstalled
-    # niquests without the vendored `packages` submodule; pip then says
-    # "already satisfied" and never upgrades it — the bot crashed on
-    # exactly that. Verify and force-reinstall when broken.
+    # WZFIX niquests guard v2: WZML-X needs a MODERN niquests — the code
+    # uses AsyncSession(headers=...) AND the vendored `packages`
+    # submodule. Kaggle base images keep rotating in stale preinstalled
+    # niquests builds that pip treats as "already satisfied" because
+    # requirements.txt pins no version (two different crashes so far).
+    # Enforce a known-good minimum on every run.
     try:
+        import importlib as _imp
         import importlib.util as _ilu
+        import inspect as _insp
 
-        _ilu.invalidate_caches()
-        if _ilu.find_spec("niquests.packages") is None:
-            log("niquests.packages missing — forcing reinstall", "WARN")
+        def _niquests_ok():
+            import sys as _sys
+
+            # drop any cached niquests so the check reads the REAL
+            # on-disk state (pip may have just replaced it)
+            for _m in [
+                m
+                for m in _sys.modules
+                if m == "niquests" or m.startswith("niquests.")
+            ]:
+                del _sys.modules[_m]
+            _imp.invalidate_caches()
+            if _ilu.find_spec("niquests") is None:
+                return False
+            if _ilu.find_spec("niquests.packages") is None:
+                return False
+            try:
+                from niquests import AsyncSession as _AS
+
+                return "headers" in _insp.signature(_AS.__init__).parameters
+            except Exception:
+                return False
+
+        # (1) always ensure the minimum (no-op when already current)
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "niquests>=3.21.1"],
+            capture_output=True, text=True, timeout=300,
+        )
+        if not _niquests_ok():
+            # (2) stale preinstalled build is shadowing — force it away
+            log("niquests stale/broken — forcing reinstall >=3.21.1", "WARN")
             subprocess.run(
                 [sys.executable, "-m", "pip", "install",
-                 "--upgrade", "--force-reinstall", "--no-deps", "niquests"],
+                 "--upgrade", "--force-reinstall", "--no-deps",
+                 "niquests>=3.21.1"],
                 capture_output=True, text=True, timeout=300,
             )
-            _ilu.invalidate_caches()
-            if _ilu.find_spec("niquests.packages") is None:
-                log("niquests still broken — sabnzbdapi fallback will carry it", "WARN")
+            if not _niquests_ok():
+                log("niquests still bad — import fallbacks will carry it", "WARN")
             else:
                 log("niquests fixed by forced reinstall")
+        else:
+            log("niquests OK (modern build verified)")
     except Exception as _nq_e:
         log(f"niquests guard failed: {_nq_e}", "WARN")
     setup_wzml_services(config)
