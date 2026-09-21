@@ -2967,8 +2967,6 @@ def apply_userrepo_patches():
                 '            return "__WZFIX_HANDLED__", None\n'
                 '        if not _qmsg and not getattr(message, "_wzfix_held", False):\n'
                 '            _qmsg = await over_limit_msg(user_id, user_dict)\n'
-                '        if not _qmsg and not getattr(message, "_wzfix_held", False):\n'
-                '            _qmsg = await over_limit_msg(user_id, user_dict)\n'
                 '            if _qmsg:\n'
                 '                # v15.28: over-quota without a pre-checkable\n'
                 '                # link gets the ONE clean message + an admin\n'
@@ -4370,6 +4368,66 @@ def apply_userrepo_patches():
                 log(f"  r2: {_mb} anchor not found", "WARN")
     except Exception as e:
         log(f"  r2: J-19 patch FAILED — {e}", "ERROR")
+
+    # J-21: user-stored ytdl options often carry extractor_args like
+    # player_client: "web_safari,web_embedded,-tv_downgraded" as ONE
+    # comma-string — yt-dlp treats the whole thing as a single client
+    # name, warns "Skipping unsupported client" and silently falls back
+    # to defaults. Split comma strings into a proper list at BOTH places
+    # options are built so the intended clients actually get used.
+    try:
+        _wz_pc_fix = (
+            "        # WZFIX player_client sanitize\n"
+            "        try:\n"
+            "            _ea = options.get(\"extractor_args\") or {}\n"
+            "            _yt = _ea.get(\"youtube\") or {}\n"
+            "            _pc = _yt.get(\"player_client\")\n"
+            "            if isinstance(_pc, (str, list)):\n"
+            "                _parts = _pc if isinstance(_pc, list) else [_pc]\n"
+            "                _split = []\n"
+            "                for _c in _parts:\n"
+            "                    _split.extend(\n"
+            "                        [p.strip() for p in str(_c).split(\",\") if p.strip()]\n"
+            "                    )\n"
+            "                if _split:\n"
+            "                    _yt[\"player_client\"] = _split\n"
+            "                    _ea[\"youtube\"] = _yt\n"
+            "                    options[\"extractor_args\"] = _ea\n"
+            "        except Exception:\n"
+            "            pass\n"
+        )
+        for _rel, _anchor in (
+            (
+                "bot/modules/ytdlp.py",
+                '        options["playlist_items"] = "0"\n',
+            ),
+            (
+                "bot/helper/mirror_leech_utils/download_utils/yt_dlp_download.py",
+                "    async def add_download(self, path, qual, playlist, options):\n",
+            ),
+        ):
+            _fp = os.path.join(WZMLX_DIR, _rel)
+            with open(_fp, "r", encoding="utf-8") as f:
+                _t = f.read()
+            if "WZFIX player_client" in _t:
+                log(f"  r2: {os.path.basename(_rel)} player_client already sanitized")
+                continue
+            if _anchor in _t:
+                _t = _t.replace(_anchor, _anchor + _wz_pc_fix, 1)
+                with open(_fp, "w", encoding="utf-8") as f:
+                    f.write(_t)
+                _r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _fp],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if _r.returncode == 0:
+                    log(f"  r2: {os.path.basename(_rel)} player_client sanitized")
+                else:
+                    log(f"  r2: {os.path.basename(_rel)} sanitize FAILED — {(_r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log(f"  r2: {os.path.basename(_rel)} anchor not found", "WARN")
+    except Exception as e:
+        log(f"  r2: J-21 patch FAILED — {e}", "ERROR")
 
     # J-13: ytdl (artists/playlists/videos) — the block message must be
     # the ONE clean message, not the old "Limit Breached" card.
