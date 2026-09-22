@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.38  (music best-pick + SponsorBlock)
+ WZFIX BUILD: v15.39  (music = mp3 audio + clean names)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -1436,22 +1436,25 @@ WZFIX_R3_MUSIC_B64 = (
     "aWNfdXJsWzo5MDBdKX1cbiIKICAgICAgICAgICAgICAgICAgICBmIuKUoCA8Yj5TZWFyY2g8L2I+IOKGkiB7X2VzYyh5dHFbOjUw"
     "MF0pfVxuIgogICAgICAgICAgICAgICAgICAgIGYi4pSWIDxiPk1lc3NhZ2U8L2I+IOKGkiAiCiAgICAgICAgICAgICAgICAgICAg"
     "ZiJ7X2VzYygobWVzc2FnZS50ZXh0IG9yIG1lc3NhZ2UuY2FwdGlvbiBvciAnJylbOjEwMDBdKSBvciAnKG5vIHRleHQpJ30iLAog"
-    "ICAgICAgICAgICAgICAgKQogICAgICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgICAgIHBhc3MKICAgICAgICBtZXNzYWdl"
-    "Ll93emZpeF9tdXNpY19ub3RlID0gZiJ7c291cmNlfToge211c2ljX3VybH0g4oaSIHt5dHF9IgogICAgICAgIGlmIGlzX3l0ZGw6"
-    "CiAgICAgICAgICAgICMgYWxyZWFkeSBpbiB0aGUgeXRkbCBlbmdpbmUg4oCUIHJld3JpdGUgdGhlIGxpbmsgaW4gcGxhY2UKICAg"
-    "ICAgICAgICAgdHJ5OgogICAgICAgICAgICAgICAgaWYgbWVzc2FnZS50ZXh0OgogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2Uu"
-    "dGV4dCA9IG1lc3NhZ2UudGV4dC5yZXBsYWNlKG11c2ljX3VybCwgeXRxKQogICAgICAgICAgICAgICAgaWYgbWVzc2FnZS5jYXB0"
-    "aW9uOgogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2UuY2FwdGlvbiA9IG1lc3NhZ2UuY2FwdGlvbi5yZXBsYWNlKG11c2ljX3Vy"
-    "bCwgeXRxKQogICAgICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICAgICAgcGFzcwogICAgICAgICAgICByZXR1"
-    "cm4gTm9uZQogICAgICAgICMgbWlycm9yIGNvbW1hbmQgKC9sIGZhbWlseSkg4oCUIHJlLWRpc3BhdGNoIHRocm91Z2ggdGhlIHl0"
-    "ZGwKICAgICAgICAjIGVuZ2luZSB3aXRoIGEgY2xlYW4gL3lsIGNvbW1hbmQgc28gbm8gL2wgYXJnIHN5bnRheCBsZWFrcwogICAg"
-    "ICAgIHRyeToKICAgICAgICAgICAgbWVzc2FnZS50ZXh0ID0gZiIveWwge3l0cX0iCiAgICAgICAgICAgIG1lc3NhZ2UuY2FwdGlv"
-    "biA9IE5vbmUKICAgICAgICAgICAgZnJvbSAuLi5tb2R1bGVzLnl0ZGxwIGltcG9ydCBZdERscAoKICAgICAgICAgICAgYXdhaXQg"
-    "WXREbHAoY2xpZW50LCBtZXNzYWdlLCBpc19sZWVjaD1ib29sKGlzX2xlZWNoKSkubmV3X2V2ZW50KCkKICAgICAgICBleGNlcHQg"
-    "RXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgIF9sb2coZiJXWkZJWCBtdXNpYyByZS1kaXNwYXRjaCBmYWlsZWQ6IHtlfSIpCiAg"
-    "ICAgICAgICAgIHJldHVybiBOb25lCiAgICAgICAgcmV0dXJuICJfX1daRklYX01VU0lDX0RPTkVfXyIKICAgIGV4Y2VwdCBFeGNl"
-    "cHRpb24gYXMgZToKICAgICAgICBfbG9nKGYiV1pGSVggbXVzaWMgcHJlX3Jlc29sdmUgZmFpbGVkOiB7ZX0iKQogICAgICAgIHJl"
-    "dHVybiBOb25lCg=="
+    "ICAgICAgICAgICAgICAgKQogICAgICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAgICAgICAgIHBhc3MKICAgICAgICB0cnk6CiAg"
+    "ICAgICAgICAgIF90ID0geXRxLnNwbGl0KCI6IiwgMSlbMV0gaWYgIjoiIGluIHl0cSBlbHNlIHl0cQogICAgICAgICAgICBfdCA9"
+    "IF90LnJzcGxpdCgiIGF1ZGlvIiwgMSlbMF0uc3RyaXAoKQogICAgICAgICAgICBpZiB5dHEuc3RhcnRzd2l0aCgieXRzZWFyY2g1"
+    "OiIpOgogICAgICAgICAgICAgICAgbWVzc2FnZS5fd3pmaXhfbXVzaWNfdGl0bGUgPSBfdAogICAgICAgIGV4Y2VwdCBFeGNlcHRp"
+    "b246CiAgICAgICAgICAgIHBhc3MKICAgICAgICBtZXNzYWdlLl93emZpeF9tdXNpY19ub3RlID0gZiJ7c291cmNlfToge211c2lj"
+    "X3VybH0g4oaSIHt5dHF9IgogICAgICAgIGlmIGlzX3l0ZGw6CiAgICAgICAgICAgICMgYWxyZWFkeSBpbiB0aGUgeXRkbCBlbmdp"
+    "bmUg4oCUIHJld3JpdGUgdGhlIGxpbmsgaW4gcGxhY2UKICAgICAgICAgICAgdHJ5OgogICAgICAgICAgICAgICAgaWYgbWVzc2Fn"
+    "ZS50ZXh0OgogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2UudGV4dCA9IG1lc3NhZ2UudGV4dC5yZXBsYWNlKG11c2ljX3VybCwg"
+    "eXRxKQogICAgICAgICAgICAgICAgaWYgbWVzc2FnZS5jYXB0aW9uOgogICAgICAgICAgICAgICAgICAgIG1lc3NhZ2UuY2FwdGlv"
+    "biA9IG1lc3NhZ2UuY2FwdGlvbi5yZXBsYWNlKG11c2ljX3VybCwgeXRxKQogICAgICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgog"
+    "ICAgICAgICAgICAgICAgcGFzcwogICAgICAgICAgICByZXR1cm4gTm9uZQogICAgICAgICMgbWlycm9yIGNvbW1hbmQgKC9sIGZh"
+    "bWlseSkg4oCUIHJlLWRpc3BhdGNoIHRocm91Z2ggdGhlIHl0ZGwKICAgICAgICAjIGVuZ2luZSB3aXRoIGEgY2xlYW4gL3lsIGNv"
+    "bW1hbmQgc28gbm8gL2wgYXJnIHN5bnRheCBsZWFrcwogICAgICAgIHRyeToKICAgICAgICAgICAgbWVzc2FnZS50ZXh0ID0gZiIv"
+    "eWwge3l0cX0iCiAgICAgICAgICAgIG1lc3NhZ2UuY2FwdGlvbiA9IE5vbmUKICAgICAgICAgICAgZnJvbSAuLi5tb2R1bGVzLnl0"
+    "ZGxwIGltcG9ydCBZdERscAoKICAgICAgICAgICAgYXdhaXQgWXREbHAoY2xpZW50LCBtZXNzYWdlLCBpc19sZWVjaD1ib29sKGlz"
+    "X2xlZWNoKSkubmV3X2V2ZW50KCkKICAgICAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgIF9sb2coZiJXWkZJ"
+    "WCBtdXNpYyByZS1kaXNwYXRjaCBmYWlsZWQ6IHtlfSIpCiAgICAgICAgICAgIHJldHVybiBOb25lCiAgICAgICAgcmV0dXJuICJf"
+    "X1daRklYX01VU0lDX0RPTkVfXyIKICAgIGV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgICAgICBfbG9nKGYiV1pGSVggbXVzaWMg"
+    "cHJlX3Jlc29sdmUgZmFpbGVkOiB7ZX0iKQogICAgICAgIHJldHVybiBOb25lCg=="
 )
 
 
@@ -3201,7 +3204,7 @@ def apply_userrepo_patches():
         with open(os.path.join(wzfix_dir, "r3_music.py"), "w", encoding="utf-8") as f:
             f.write(base64.b64decode(WZFIX_R3_MUSIC_B64).decode("utf-8"))
         log("  r1: wrote bot/helper/wzfix/r1_core.py + r3_music.py + bot/modules/wzfix_admin.py")
-        log("  WZFIX BUILD v15.38 running")
+        log("  WZFIX BUILD v15.39 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -4871,6 +4874,11 @@ def apply_userrepo_patches():
         # versions pass; the flag enables SponsorBlock in the downloader
         if str(self.link).startswith("ytsearch"):
             self._wzfix_music = True
+            self.name = (
+                getattr(self.message, "_wzfix_music_title", "") or self.name
+            )
+            if not self.select:
+                qual = "ba/b-mp3-320"
             if self.link.startswith("ytsearch:"):
                 try:
                     _ents = [e for e in (result.get("entries") or []) if e]
