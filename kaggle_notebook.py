@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.36  (ytsearch gate + web JS escape fix)
+ WZFIX BUILD: v15.37  (ytsearch rclone-exclude fix)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -3200,7 +3200,7 @@ def apply_userrepo_patches():
         with open(os.path.join(wzfix_dir, "r3_music.py"), "w", encoding="utf-8") as f:
             f.write(base64.b64decode(WZFIX_R3_MUSIC_B64).decode("utf-8"))
         log("  r1: wrote bot/helper/wzfix/r1_core.py + r3_music.py + bot/modules/wzfix_admin.py")
-        log("  WZFIX BUILD v15.36 running")
+        log("  WZFIX BUILD v15.37 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -4808,6 +4808,36 @@ def apply_userrepo_patches():
             log("  r2: ytdlp.py ytsearch gate already applied")
     except Exception as e:
         log(f"  r2: J-23 patch FAILED — {e}", "ERROR")
+
+    # J-24: ytsearch queries must not be mistaken for rclone remote
+    # paths (ytsearch:Artist - Song audio looks like remote:path)
+    try:
+        _lp = os.path.join(WZMLX_DIR, "bot/helper/ext_utils/links_utils.py")
+        with open(_lp, "r", encoding="utf-8") as f:
+            _t = f.read()
+        if "WZFIX ytsearch rclone exclude" not in _t:
+            _old = "(?!(magnet:|mtp:|sa:|tp:))"
+            _new = "(?!(magnet:|mtp:|sa:|tp:|ytsearch))"
+            if _old in _t:
+                _t = _t.replace(_old, _new, 1)
+                with open(_lp, "w", encoding="utf-8") as f:
+                    f.write(_t)
+                _r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _lp],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if _r.returncode == 0:
+                    log("  r2: links_utils.py ytsearch rclone exclude applied")
+                else:
+                    log(f"  r2: links_utils.py rclone exclude FAILED — {(_r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: links_utils.py rclone anchor missing", "WARN")
+        else:
+            log("  r2: links_utils.py ytsearch rclone exclude already applied")
+    except Exception as e:
+        log(f"  r2: J-24 patch FAILED — {e}", "ERROR")
 
     # J-13: ytdl (artists/playlists/videos) — the block message must be
     # the ONE clean message, not the old "Limit Breached" card.
