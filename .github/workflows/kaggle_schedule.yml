@@ -97,8 +97,8 @@ jobs:
           echo "Forced action: $FORCED_ACTION (manual override)"
           exit 0
         fi
-        UTC_HOUR=$(date -u "%H")
-        UTC_MIN=$(date -u "%M")
+        UTC_HOUR=$(date -u +"%H")
+        UTC_MIN=$(date -u +"%M")
         echo "UTC time: ${UTC_HOUR}:${UTC_MIN}"
 
         if [[ "$UTC_HOUR" -eq 0 && "$UTC_MIN" -ge 25 ]] ||            [[ "$UTC_HOUR" -eq 1 && "$UTC_MIN" -le 5 ]]; then
