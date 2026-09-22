@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.35  (web gmusic fix + hardened music resolver)
+ WZFIX BUILD: v15.36  (ytsearch gate + web JS escape fix)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2620,39 +2620,39 @@ WZFIX_WEB_B64 = (
     "Ll9nY2FwfHwxNSk6dS5jYXBfZ2J9CmZ1bmN0aW9uIGFza0NhcCh1aWQpe3ZhciB2PXByb21wdCgiTmV3IGNhcCBpbiBHQiBmb3Ig"
     "Iit1aWQrIlxcbigwID0gYmFjayB0byBnbG9iYWwgZGVmYXVsdCkiLCIiKTtpZih2PT09bnVsbClyZXR1cm47YWN0KHthY3Rpb246"
     "InNldGNhcCIsdWlkOnVpZCxnYjpwYXJzZUZsb2F0KHZ8fCIwIil8fDB9KX0KZnVuY3Rpb24gYXNrTXVzaWModWlkKXt2YXIgdj1w"
-    "cm9tcHQoIk11c2ljIGxpbWl0IChzb25ncykgZm9yICIrdWlkKyJcbigwID0gYmFjayB0byBkZWZhdWx0LCBtYXggNTAwKSIsIiIp"
-    "O2lmKHY9PT1udWxsKXJldHVybjthY3Qoe2FjdGlvbjoic2V0bXVzaWMiLHVpZDp1aWQsbjpwYXJzZUludCh2KXx8MH0pfQpmdW5j"
-    "dGlvbiBhc2tHTXVzaWMoKXt2YXIgdj1wcm9tcHQoIkRlZmF1bHQgbXVzaWMgbGltaXQgZm9yIEFMTCB1c2VycyAoc29uZ3MsIG1h"
-    "eCA1MDApIiwiIisod2luZG93Ll9nbXVzaWN8fDEwKSk7aWYodj09PW51bGwpcmV0dXJuO2FjdCh7YWN0aW9uOiJnbXVzaWMiLG46"
-    "cGFyc2VJbnQodil8fDEwfSl9CmZ1bmN0aW9uIGFza0JvdENhcCgpe3ZhciB2PXByb21wdCgiRGVmYXVsdCBjYXAgZm9yIEFMTCB1"
-    "c2VycyAoR0IpIiwiIisod2luZG93Ll9nY2FwfHwxNSkpO2lmKHY9PT1udWxsKXJldHVybjthY3Qoe2FjdGlvbjoiYm90Y2FwIixn"
-    "YjpwYXJzZUZsb2F0KHYpfHwwfSl9CmZ1bmN0aW9uIGFza0RlZHVjdCh1aWQpe3ZhciB2PXByb21wdCgiUmVkdWNlIGNhcCBieSAo"
-    "R0IpIGZvciAiK3VpZCwiMC41Iik7aWYodj09PW51bGwpcmV0dXJuO2FjdCh7YWN0aW9uOiJkZWR1Y3RjYXAiLHVpZDp1aWQsZ2I6"
-    "cGFyc2VGbG9hdCh2KXx8MH0pfQpmdW5jdGlvbiBhc2tCYW4odWlkKXt2YXIgdT0od2luZG93Ll91c2Vyc3x8W10pLmZpbHRlcihm"
-    "dW5jdGlvbih4KXtyZXR1cm4geC51aWQ9PT11aWR9KVswXTsKaWYodSYmdS5iYW5uZWQpe2FjdCh7YWN0aW9uOiJ1bmJhbiIsdWlk"
-    "OnVpZH0pfQplbHNlIGlmKGNvbmZpcm0oIkJhbiB1c2VyICIrdWlkKyI/IChjYXAgPSAwIOKAlCBhbGwgdGFza3MgYmxvY2tlZCki"
-    "KSl7YWN0KHthY3Rpb246ImJhbiIsdWlkOnVpZH0pfX0KZnVuY3Rpb24gYXNrRGVsKHVpZCl7aWYoY29uZmlybSgiUmVtb3ZlIHVz"
-    "ZXIgIit1aWQrIiBmcm9tIHRoZSByZWdpc3RyeT8gKHRoZWlyIC9maW5kIGhpc3RvcnkgaXMga2VwdCkiKSlhY3Qoe2FjdGlvbjoi"
-    "ZGVsdXNlciIsdWlkOnVpZH0pfQpmdW5jdGlvbiBraWxsQWxsKCl7aWYoY29uZmlybSgiQ2FuY2VsIEFMTCBhY3RpdmUgdGFza3M/"
-    "IikpYWN0KHthY3Rpb246ImtpbGxhbGwifSl9CgpmdW5jdGlvbiBzaG93SGlzdCh1aWQpewogIHdpbmRvdy5faGlzdFVpZD11aWQ7"
-    "cmVuZGVySGlzdCh1aWQsdHJ1ZSl9CmZ1bmN0aW9uIHJlbmRlckhpc3QodWlkLHNjcm9sbCl7CiAgYXBpKCJoaXN0b3J5P3VpZD0i"
-    "K3VpZCkudGhlbihmdW5jdGlvbihqKXsKICAgIHZhciBoPShqLml0ZW1zfHxbXSkubWFwKGZ1bmN0aW9uKGQpewogICAgICByZXR1"
-    "cm4gJzxkaXYgY2xhc3M9Imhpc3QtaXRlbSI+PGRpdiBzdHlsZT0iZmxleDoxO21pbi13aWR0aDowIj48ZGl2IHN0eWxlPSJmb250"
-    "LXdlaWdodDo2MDA7Zm9udC1zaXplOjEzcHg7d2hpdGUtc3BhY2U6bm93cmFwO292ZXJmbG93OmhpZGRlbjt0ZXh0LW92ZXJmbG93"
-    "OmVsbGlwc2lzIj4nK2VzYyhkLm5hbWUpKyc8L2Rpdj48ZGl2IGNsYXNzPSJtdXRlZCI+JytmbXQoZC5zaXplKSsnIMK3ICcrZXNj"
-    "KGQuZGF0ZSkrJzwvZGl2PjwvZGl2PicrKGQudGc/JzxhIGhyZWY9IicrZXNjKGQudGcpKyciPuKWtjwvYT4nOicnKSsoZC5jbG91"
-    "ZD8nPGEgaHJlZj0iJytlc2MoZC5jbG91ZCkrJyI+4piBPC9hPic6JycpKyc8L2Rpdj4nfSkuam9pbigiIik7CiAgICBpZighaClo"
-    "PSc8ZGl2IGNsYXNzPSJtdXRlZCI+Tm8gaGlzdG9yeSB5ZXQuPC9kaXY+JzsKICAgIHZhciBjPWRvY3VtZW50LmNyZWF0ZUVsZW1l"
-    "bnQoImRpdiIpO2MuY2xhc3NOYW1lPSJjYXJkIjtjLmlkPSJoaXN0Q2FyZCI7CiAgICBjLmlubmVySFRNTD0nPGRpdiBjbGFzcz0i"
-    "cm93Ij48ZGl2IGNsYXNzPSJ1c3ItbmFtZSIgc3R5bGU9ImZsZXg6MSI+SGlzdG9yeTwvZGl2PjxidXR0b24gY2xhc3M9ImJ0biIg"
-    "aWQ9Imhpc3RYIj7inJU8L2J1dHRvbj48L2Rpdj4nK2g7CiAgICB2YXIgb2xkPWRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJoaXN0"
-    "Q2FyZCIpO2lmKG9sZClvbGQucmVtb3ZlKCk7CiAgICAkKCJ1c2VycyIpLnByZXBlbmQoYyk7Yy5xdWVyeVNlbGVjdG9yKCIjaGlz"
-    "dFgiKS5vbmNsaWNrPWZ1bmN0aW9uKCl7d2luZG93Ll9oaXN0VWlkPW51bGw7Yy5yZW1vdmUoKX07CiAgICBpZihzY3JvbGwpYy5z"
-    "Y3JvbGxJbnRvVmlldyh7YmVoYXZpb3I6InNtb290aCJ9KTsKICB9KX0KCmFwaSgic3RhdGUiKS50aGVuKGZ1bmN0aW9uKGope2lm"
-    "KGoub2spZW50ZXIoKTtlbHNlICQoImxvZ2luIikuY2xhc3NMaXN0LnJlbW92ZSgiaGlkZGVuIil9KQogIC5jYXRjaChmdW5jdGlv"
-    "bigpeyQoImxvZ2luIikuY2xhc3NMaXN0LnJlbW92ZSgiaGlkZGVuIil9KTsKcmVmcmVzaCgpOwpzZXRJbnRlcnZhbChmdW5jdGlv"
-    "bigpe2lmKCFkb2N1bWVudC5oaWRkZW4mJiQoImFwcCIpLmNsYXNzTmFtZS5pbmRleE9mKCJoaWRkZW4iKT09PS0xKXJlZnJlc2go"
-    "KX0sNTAwMCk7Cjwvc2NyaXB0Pgo8L2JvZHk+CjwvaHRtbD4KIiIiCg=="
+    "cm9tcHQoIk11c2ljIGxpbWl0IChzb25ncykgZm9yICIrdWlkKyJcXG4oMCA9IGJhY2sgdG8gZGVmYXVsdCwgbWF4IDUwMCkiLCIi"
+    "KTtpZih2PT09bnVsbClyZXR1cm47YWN0KHthY3Rpb246InNldG11c2ljIix1aWQ6dWlkLG46cGFyc2VJbnQodil8fDB9KX0KZnVu"
+    "Y3Rpb24gYXNrR011c2ljKCl7dmFyIHY9cHJvbXB0KCJEZWZhdWx0IG11c2ljIGxpbWl0IGZvciBBTEwgdXNlcnMgKHNvbmdzLCBt"
+    "YXggNTAwKSIsIiIrKHdpbmRvdy5fZ211c2ljfHwxMCkpO2lmKHY9PT1udWxsKXJldHVybjthY3Qoe2FjdGlvbjoiZ211c2ljIixu"
+    "OnBhcnNlSW50KHYpfHwxMH0pfQpmdW5jdGlvbiBhc2tCb3RDYXAoKXt2YXIgdj1wcm9tcHQoIkRlZmF1bHQgY2FwIGZvciBBTEwg"
+    "dXNlcnMgKEdCKSIsIiIrKHdpbmRvdy5fZ2NhcHx8MTUpKTtpZih2PT09bnVsbClyZXR1cm47YWN0KHthY3Rpb246ImJvdGNhcCIs"
+    "Z2I6cGFyc2VGbG9hdCh2KXx8MH0pfQpmdW5jdGlvbiBhc2tEZWR1Y3QodWlkKXt2YXIgdj1wcm9tcHQoIlJlZHVjZSBjYXAgYnkg"
+    "KEdCKSBmb3IgIit1aWQsIjAuNSIpO2lmKHY9PT1udWxsKXJldHVybjthY3Qoe2FjdGlvbjoiZGVkdWN0Y2FwIix1aWQ6dWlkLGdi"
+    "OnBhcnNlRmxvYXQodil8fDB9KX0KZnVuY3Rpb24gYXNrQmFuKHVpZCl7dmFyIHU9KHdpbmRvdy5fdXNlcnN8fFtdKS5maWx0ZXIo"
+    "ZnVuY3Rpb24oeCl7cmV0dXJuIHgudWlkPT09dWlkfSlbMF07CmlmKHUmJnUuYmFubmVkKXthY3Qoe2FjdGlvbjoidW5iYW4iLHVp"
+    "ZDp1aWR9KX0KZWxzZSBpZihjb25maXJtKCJCYW4gdXNlciAiK3VpZCsiPyAoY2FwID0gMCDigJQgYWxsIHRhc2tzIGJsb2NrZWQp"
+    "Iikpe2FjdCh7YWN0aW9uOiJiYW4iLHVpZDp1aWR9KX19CmZ1bmN0aW9uIGFza0RlbCh1aWQpe2lmKGNvbmZpcm0oIlJlbW92ZSB1"
+    "c2VyICIrdWlkKyIgZnJvbSB0aGUgcmVnaXN0cnk/ICh0aGVpciAvZmluZCBoaXN0b3J5IGlzIGtlcHQpIikpYWN0KHthY3Rpb246"
+    "ImRlbHVzZXIiLHVpZDp1aWR9KX0KZnVuY3Rpb24ga2lsbEFsbCgpe2lmKGNvbmZpcm0oIkNhbmNlbCBBTEwgYWN0aXZlIHRhc2tz"
+    "PyIpKWFjdCh7YWN0aW9uOiJraWxsYWxsIn0pfQoKZnVuY3Rpb24gc2hvd0hpc3QodWlkKXsKICB3aW5kb3cuX2hpc3RVaWQ9dWlk"
+    "O3JlbmRlckhpc3QodWlkLHRydWUpfQpmdW5jdGlvbiByZW5kZXJIaXN0KHVpZCxzY3JvbGwpewogIGFwaSgiaGlzdG9yeT91aWQ9"
+    "Iit1aWQpLnRoZW4oZnVuY3Rpb24oail7CiAgICB2YXIgaD0oai5pdGVtc3x8W10pLm1hcChmdW5jdGlvbihkKXsKICAgICAgcmV0"
+    "dXJuICc8ZGl2IGNsYXNzPSJoaXN0LWl0ZW0iPjxkaXYgc3R5bGU9ImZsZXg6MTttaW4td2lkdGg6MCI+PGRpdiBzdHlsZT0iZm9u"
+    "dC13ZWlnaHQ6NjAwO2ZvbnQtc2l6ZToxM3B4O3doaXRlLXNwYWNlOm5vd3JhcDtvdmVyZmxvdzpoaWRkZW47dGV4dC1vdmVyZmxv"
+    "dzplbGxpcHNpcyI+Jytlc2MoZC5uYW1lKSsnPC9kaXY+PGRpdiBjbGFzcz0ibXV0ZWQiPicrZm10KGQuc2l6ZSkrJyDCtyAnK2Vz"
+    "YyhkLmRhdGUpKyc8L2Rpdj48L2Rpdj4nKyhkLnRnPyc8YSBocmVmPSInK2VzYyhkLnRnKSsnIj7ilrY8L2E+JzonJykrKGQuY2xv"
+    "dWQ/JzxhIGhyZWY9IicrZXNjKGQuY2xvdWQpKyciPuKYgTwvYT4nOicnKSsnPC9kaXY+J30pLmpvaW4oIiIpOwogICAgaWYoIWgp"
+    "aD0nPGRpdiBjbGFzcz0ibXV0ZWQiPk5vIGhpc3RvcnkgeWV0LjwvZGl2Pic7CiAgICB2YXIgYz1kb2N1bWVudC5jcmVhdGVFbGVt"
+    "ZW50KCJkaXYiKTtjLmNsYXNzTmFtZT0iY2FyZCI7Yy5pZD0iaGlzdENhcmQiOwogICAgYy5pbm5lckhUTUw9JzxkaXYgY2xhc3M9"
+    "InJvdyI+PGRpdiBjbGFzcz0idXNyLW5hbWUiIHN0eWxlPSJmbGV4OjEiPkhpc3Rvcnk8L2Rpdj48YnV0dG9uIGNsYXNzPSJidG4i"
+    "IGlkPSJoaXN0WCI+4pyVPC9idXR0b24+PC9kaXY+JytoOwogICAgdmFyIG9sZD1kb2N1bWVudC5nZXRFbGVtZW50QnlJZCgiaGlz"
+    "dENhcmQiKTtpZihvbGQpb2xkLnJlbW92ZSgpOwogICAgJCgidXNlcnMiKS5wcmVwZW5kKGMpO2MucXVlcnlTZWxlY3RvcigiI2hp"
+    "c3RYIikub25jbGljaz1mdW5jdGlvbigpe3dpbmRvdy5faGlzdFVpZD1udWxsO2MucmVtb3ZlKCl9OwogICAgaWYoc2Nyb2xsKWMu"
+    "c2Nyb2xsSW50b1ZpZXcoe2JlaGF2aW9yOiJzbW9vdGgifSk7CiAgfSl9CgphcGkoInN0YXRlIikudGhlbihmdW5jdGlvbihqKXtp"
+    "ZihqLm9rKWVudGVyKCk7ZWxzZSAkKCJsb2dpbiIpLmNsYXNzTGlzdC5yZW1vdmUoImhpZGRlbiIpfSkKICAuY2F0Y2goZnVuY3Rp"
+    "b24oKXskKCJsb2dpbiIpLmNsYXNzTGlzdC5yZW1vdmUoImhpZGRlbiIpfSk7CnJlZnJlc2goKTsKc2V0SW50ZXJ2YWwoZnVuY3Rp"
+    "b24oKXtpZighZG9jdW1lbnQuaGlkZGVuJiYkKCJhcHAiKS5jbGFzc05hbWUuaW5kZXhPZigiaGlkZGVuIik9PT0tMSlyZWZyZXNo"
+    "KCl9LDUwMDApOwo8L3NjcmlwdD4KPC9ib2R5Pgo8L2h0bWw+CiIiIgo="
 )
 
 
@@ -3200,7 +3200,7 @@ def apply_userrepo_patches():
         with open(os.path.join(wzfix_dir, "r3_music.py"), "w", encoding="utf-8") as f:
             f.write(base64.b64decode(WZFIX_R3_MUSIC_B64).decode("utf-8"))
         log("  r1: wrote bot/helper/wzfix/r1_core.py + r3_music.py + bot/modules/wzfix_admin.py")
-        log("  WZFIX BUILD v15.35 running")
+        log("  WZFIX BUILD v15.36 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -4773,6 +4773,41 @@ def apply_userrepo_patches():
                 log(f"  r2: {os.path.basename(_rel)} music hook anchor missing", "WARN")
     except Exception as e:
         log(f"  r2: J-22 patch FAILED — {e}", "ERROR")
+
+    # J-23: music searches (v15.36) — ytsearch queries are not URLs;
+    # the is_url gate in ytdlp.py must accept them
+    try:
+        _p = os.path.join(WZMLX_DIR, "bot/modules/ytdlp.py")
+        with open(_p, "r", encoding="utf-8") as f:
+            _t = f.read()
+        if "WZFIX ytsearch gate" not in _t:
+            _old = "        if not is_url(self.link):\n"
+            _new = (
+                "        # WZFIX ytsearch gate: music resolutions rewrite the\n"
+                "        # link to a ytsearch query, which is not a URL\n"
+                "        if not (is_url(self.link) or\n"
+                '                self.link.startswith("ytsearch")):\n'
+            )
+            if _old in _t:
+                _t = _t.replace(_old, _new, 1)
+                with open(_p, "w", encoding="utf-8") as f:
+                    f.write(_t)
+                _r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _p],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if _r.returncode == 0:
+                    log("  r2: ytdlp.py ytsearch gate applied")
+                else:
+                    log(f"  r2: ytdlp.py ytsearch gate FAILED — {(_r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r2: ytdlp.py is_url anchor missing", "WARN")
+        else:
+            log("  r2: ytdlp.py ytsearch gate already applied")
+    except Exception as e:
+        log(f"  r2: J-23 patch FAILED — {e}", "ERROR")
 
     # J-13: ytdl (artists/playlists/videos) — the block message must be
     # the ONE clean message, not the old "Limit Breached" card.
