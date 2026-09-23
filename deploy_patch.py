@@ -1,11 +1,11 @@
-"""One-shot patch: v15.55 -> v15.56.
+"""One-shot patch: v15.56 -> v15.57.
 
-J-32 JioSaavn site-name guard: the bot's fetch of some song pages gets
-the SHORT og:title variant ("Ishq - JioSaavn"), so the site name became
-the artist and the search went out as "JioSaavn - Ishq" (wrong song).
-Site/nav tokens are now blacklisted as title/artist candidates; the
-JSON primary_artists fallback (proven correct: "Amrinder Gill") fills
-the artist.
+J-33 JioSaavn meta-description fallback: v15.56's page fetch (short
+og:title variant) carried no primary_artists JSON either, so the search
+went out as just "Ishq" and the best-pick returned the wrong song. The
+SEO meta description ("Ishq is a Punjabi language song and is sung by
+Amrinder Gill.") is present in every page variant and now fills both
+title and artist when og:title/JSON come up short.
 """
 
 import ast
@@ -72,6 +72,26 @@ async def _resolve_jiosaavn(url, mmax=10):
                     break
             elif not title:
                 title = seg
+        # meta description: "Ishq is a Punjabi language song and is sung by
+        # Amrinder Gill." — present in every page variant for SEO
+        if not (title and artist):
+            m = re.search(
+                r'<meta\s+(?:name="description"|property="og:description")'
+                r'\s+content="([^"]+)"',
+                html,
+            ) or re.search(
+                r'property="og:description"\s+content="([^"]+)"', html
+            )
+            if m:
+                d = _clean(m.group(1))
+                mm = re.search(
+                    r"([^.]{2,80}?)\s+is\s+(?:a|an)\s+[\w\s]{0,40}song"
+                    r"(?:\s+and|\s+which)\s+is\s+sung\s+by\s+([^.]+)",
+                    d, re.I,
+                )
+                if mm:
+                    title = title or _clean(mm.group(1))
+                    artist = artist or _clean(mm.group(2))
         # structured JSON fallback — specific keys only (a generic "title"
         # matches nav/menu items like "Home" in the page JSON)
         if not (title and artist):
@@ -159,10 +179,10 @@ block = "WZFIX_R3_MUSIC_B64 = (\n" + "".join(
 s = s[:m.start()] + block + s[m.end():]
 
 # ---- bump the version ----
-n = s.count("v15.55")
-s = s.replace("v15.55", "v15.56")
+n = s.count("v15.56")
+s = s.replace("v15.56", "v15.57")
 
 with open(P, "w", encoding="utf-8") as f:
     f.write(s)
 py_compile.compile(P, doraise=True)
-print(f"patch OK: J-32 jiosaavn site-name guard, {n} markers bumped to v15.56")
+print(f"patch OK: J-33 jiosaavn meta-description fallback, {n} markers bumped to v15.57")
