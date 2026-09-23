@@ -5,8 +5,9 @@ Session source (first match wins):
   1. TG_TEST_SESSION environment variable (GitHub repo secret)
   2. TEST_SESSION in the private Kaggle config dataset
 
-Both Pyrogram/WZML-X-style session strings and Telethon-style session
-strings are supported -- the format is auto-detected.
+Supported formats: WZGram checksummed WZ_ strings (parsed natively by
+the wzgram library), Pyrogram/WZML-X-style strings and Telethon-style
+strings -- the format is auto-detected.
 
 Scenarios:
   ping    -- send /start, capture the reply (checks bot alive + allowance)
@@ -119,6 +120,9 @@ class TelethonAdapter:
 
 
 class PyrogramAdapter:
+    """Backed by the wzgram-provided pyrogram module (drop-in fork):
+    handles both standard Pyrogram strings and native WZGram WZ_ strings."""
+
     def __init__(self, api_id, api_hash, session):
         from pyrogram import Client
         self.c = Client(
@@ -201,9 +205,9 @@ def _b64_key(key):
 
 
 def normalize_session(s):
-    """Handle prefixed/custom session formats (e.g. WZ_). Returns a
-    standard Telethon or Pyrogram session string. Diagnostics never
-    include auth key material."""
+    """Handle prefixed/custom session formats (e.g. older WZ_ variants).
+    Returns a standard Telethon or Pyrogram session string. Diagnostics
+    never include auth key material."""
     s = s.strip()
     if not s.startswith("WZ_"):
         return s
@@ -285,13 +289,19 @@ def normalize_session(s):
     except Exception:
         pass
     sys.exit("WZ_ session not parseable (2): " + "; ".join(diag)
-             + " -- if the payload looks like noise, the generator app "
-               "may encrypt its sessions; generate a standard Pyrogram "
-               "or Telethon session string instead")
+             + " -- the current WZGram format must be parsed by the "
+               "wzgram library itself")
 
 
 def make_adapter(api_id, api_hash, session):
-    s = normalize_session(session).strip()
+    s = session.strip()
+    if s.startswith("WZ_"):
+        # native WZGram (Pyrogram fork) checksummed format -- only the
+        # wzgram library itself can parse it; PyrogramAdapter is backed
+        # by the wzgram-provided pyrogram module.
+        log("[client] wzgram (native WZ_)")
+        return PyrogramAdapter(api_id, api_hash, s)
+    s = normalize_session(s).strip()
     if s.startswith("1"):
         log("[client] telethon")
         return TelethonAdapter(api_id, api_hash, s)

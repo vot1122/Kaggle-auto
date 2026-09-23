@@ -4,6 +4,10 @@ name: Bot Test
 # session (TG_TEST_SESSION repo secret, or TEST_SESSION in the private
 # Kaggle config dataset). Results are committed to bot_test/last-result.md
 # (public, but no secrets in it).
+#
+# The runner installs wzgram (Pyrogram fork) instead of pyrofork: it is a
+# drop-in `pyrogram` module AND natively parses WZGram WZ_ session
+# strings (checksummed V3 format).
 
 on:
   workflow_dispatch:
@@ -41,7 +45,7 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-          pip install telethon pyrofork kaggle
+          pip install telethon wzgram kaggle
 
       - name: Run test
         env:
