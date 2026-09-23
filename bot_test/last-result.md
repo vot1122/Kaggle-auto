@@ -1,11 +1,11 @@
-# bot test: cmd /d https://music.apple.com/us/song/ishq-ho-gaya/1735765583
+# bot test: cmd /dl https://open.spotify.com/track/52HEmNCNvewyByx7xofF0T
 
 ```
 [session] REPAIRED: 2 missing chars at pos 289 (restored '--')
 [client] wzgram (native WZ_)
 [me] 6726918562 CP smile
-[send] /d https://music.apple.com/us/song/ishq-ho-gaya/1735765583
-[text] 1. Amrinder Gill - Ishq Ho Gaya
+[send] /dl https://open.spotify.com/track/52HEmNCNvewyByx7xofF0T
+[text] 1. Amrinder Gill - Mera Deewanapan
 
 Task By CP smile  ( #ID6726918562 )
 ┟ [□□□□□□□□□□□□] 0%
@@ -15,25 +15,25 @@ Task By CP smile  ( #ID6726918562 )
 ┠ Time → - of 32s ( 32s )
 ┠ Engine → yt-dlp v2026.08.19
 ┠ In Mode → #ytdlp
-┠ Out Mode → #GDrive
-┖ Stop → /c_24354ec2
+┠ Out Mode → #Leech
+┖ Stop → /c_1edabe58
 
 ⌬ Bot Stats
-┟ CPU → 3.0% | F → 1.00TB [12.7%]
-┖ RAM → 4.6% | UP → 26m35s
+┟ CPU → 2.8% | F → 1.00TB [12.7%]
+┖ RAM → 4.8% | UP → 31m7s
 [buttons] ['📜 TStats', '♻️ Refresh']
-[text] Amrinder Gill - Ishq Ho Gaya.mp3
+[file] Amrinder Gill - Mera Deewanapan.mp3 9.4MB
+[text] Amrinder Gill - Mera Deewanapan.mp3
 │
-┟ Task Size → 9.80MB
-┠ Time Taken → 59s
+┟ Task Size → 9.42MB
+┠ Time Taken → 1m5s
 ┠ In Mode → #ytdlp
-┠ Out Mode → #GDrive
-│
-┟ Type → audio/mpeg
-┃
+┠ Out Mode → #Leech
+┠ Total Files: 1
 ┖ Task By → @alonexboyy
 
-〶 Action Performed :
-⋗ Cloud link(s) have been sent to User PM
-[buttons] ['☁️ Cloud Link']
+〶 Files List :
+1. Amrinder Gill - Mera Deewanapan.mp3
+┠ Get Media → Store Link | Share Link
+┖ Direct → Stream | Download
 ```
