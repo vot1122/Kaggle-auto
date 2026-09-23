@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.52  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.53  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -4020,12 +4020,12 @@ def apply_userrepo_patches():
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.52"\n'
+                'WZFIX_BUILD = "v15.53"\n'
                 'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.52 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.52 running")
+        log("  r1: versions.py written (v15.53 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.53 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -5993,6 +5993,61 @@ def apply_userrepo_patches():
                 )
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
+
+    # J-29: music keep-chat (v15.53) — hyper uploads of music zips go to
+    # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
+    # music files must stay in the chat where they were requested
+    try:
+        _p = os.path.join(
+            WZMLX_DIR, "bot/helper/ext_utils/hyperul_utils.py"
+        )
+        with open(_p, "r", encoding="utf-8") as f:
+            _t = f.read()
+        if "WZFIX music keep-chat" not in _t:
+            _old = (
+                "            use_hyper = Config.USE_HYPER and self.clients"
+                " and up_size > 10 * 1024 * 1024"
+            )
+            _new = (
+                "            # WZFIX music keep-chat (v15.53): the hyper"
+                " pool routes\n"
+                "            # >10MB files to LEECH_LOG_CHAT, which hides"
+                " the delivered\n"
+                "            # zip from the user's chat — music files stay"
+                " in the\n"
+                "            # requesting chat\n"
+                "            use_hyper = (\n"
+                "                Config.USE_HYPER\n"
+                "                and self.clients\n"
+                "                and up_size > 10 * 1024 * 1024\n"
+                "                and not getattr(\n"
+                "                    self._listener, \"_wzfix_music\", False\n"
+                "                )\n"
+                "            )"
+            )
+            if _old in _t:
+                _t = _t.replace(_old, _new, 1)
+                with open(_p, "w", encoding="utf-8") as f:
+                    f.write(_t)
+                _r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _p],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if _r.returncode == 0:
+                    log("  r2: hyperul_utils.py music keep-chat applied")
+                else:
+                    log(
+                        f"  r2: hyperul_utils.py keep-chat FAILED — "
+                        f"{(_r.stderr or '').strip()[:200]}",
+                        "ERROR",
+                    )
+            else:
+                log("  r2: hyperul_utils.py use_hyper anchor missing", "WARN")
+        else:
+            log("  r2: hyperul_utils.py music keep-chat already applied")
+    except Exception as e:
+        log(f"  r2: J-29 patch FAILED — {e}", "ERROR")
+
 
 
     # J-13: ytdl (artists/playlists/videos) — the block message must be
