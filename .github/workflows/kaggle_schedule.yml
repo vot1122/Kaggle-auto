@@ -1,28 +1,38 @@
 # ============================================================
-# GitHub Actions Workflow - WZML-X Kaggle Schedule (v5)
+# GitHub Actions Workflow - WZML-X Kaggle Schedule (v6)
 # ============================================================
 #
 # SCHEDULE (IST, GitHub runs in UTC):
-# 06:00 IST = Morning start (randomized 06:00-06:30 by manager)
-# 07:00 IST = Health check (ensure bot is running)
-# 15:00 IST = Midday health (ensure bot is running)
-# 22:30 IST = Evening stop (randomized 22:30-23:00 by manager)
+#   06:00 IST = Morning start (randomized 06:00-06:30 by manager)
+#   07:00 IST = Health check (ensure bot is running)
+#   15:00 IST = Midday health (ensure bot is running)
+#   22:30 IST = Evening stop (randomized 22:30-23:00 by manager)
 #
 # UTC conversions (IST = UTC + 5:30):
-# 06:00 IST = 00:30 UTC
-# 07:00 IST = 01:30 UTC
-# 15:00 IST = 09:30 UTC
-# 22:30 IST = 17:00 UTC
+#   06:00 IST = 00:30 UTC
+#   07:00 IST = 01:30 UTC
+#   15:00 IST = 09:30 UTC
+#   22:30 IST = 17:00 UTC
 #
 # REQUIRED GITHUB SECRETS:
-# KAGGLE_USERNAME - Kaggle username
-# KAGGLE_KEY - Kaggle API key
-# KAGGLE_NOTEBOOK - Notebook slug (username/notebook-title)
+#   KAGGLE_USERNAME   - Kaggle username
+#   KAGGLE_KEY        - Kaggle API key
+#   KAGGLE_NOTEBOOK   - Notebook slug (username/notebook-title)
 #
 # OPTIONAL (for workflow notifications):
-# NTFY_TOPIC - ntfy.sh topic
-# TG_BOT_TOKEN - Bot token
-# TG_CHAT_ID - Your Telegram user ID
+#   NTFY_TOPIC  - ntfy.sh topic
+#   TG_BOT_TOKEN - Bot token
+#   TG_CHAT_ID   - Your Telegram user ID
+#
+# OPTIONAL (full Spotify discography for artist links):
+#   SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET - your Spotify app
+#   credentials (developer.spotify.com dashboard). When set, they
+#   are synced automatically into the Kaggle config dataset on every
+#   run (only when the values change). Without them the bot uses
+#   Spotify's anonymous web-player token, which also works but has
+#   shared per-IP quotas. Secrets are never committed to this repo
+#   or written into the public notebook - they live only in the
+#   private Kaggle config dataset.
 #
 # PLACE AT: .github/workflows/kaggle_schedule.yml
 # ============================================================
@@ -87,6 +97,45 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install kaggle==1.6.17
+
+    - name: Sync Spotify credentials to Kaggle config (optional)
+      if: ${{ secrets.SPOTIFY_CLIENT_ID != '' && secrets.SPOTIFY_CLIENT_SECRET != '' }}
+      env:
+        SPID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+        SPEC: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      run: |
+        set -e
+        mkdir -p /tmp/cfgsync && cd /tmp/cfgsync
+        kaggle datasets download djoshi7/wzmlx-config -p . --unzip --force >/dev/null 2>&1 || true
+        if [ ! -f config.env ]; then
+          echo "config.env not found in the dataset - skipping secret sync"
+          exit 0
+        fi
+        if grep -q "^SPOTIFY_CLIENT_ID=\"$SPID\"" config.env && grep -q "^SPOTIFY_CLIENT_SECRET=\"$SPEC\"" config.env; then
+          echo "Spotify credentials already up to date - nothing to push"
+          exit 0
+        fi
+        if grep -q "^SPOTIFY_CLIENT_ID=" config.env; then
+          sed -i "s|^SPOTIFY_CLIENT_ID=.*|SPOTIFY_CLIENT_ID=\"$SPID\"|" config.env
+        else
+          printf 'SPOTIFY_CLIENT_ID="%s"\n' "$SPID" >> config.env
+        fi
+        if grep -q "^SPOTIFY_CLIENT_SECRET=" config.env; then
+          sed -i "s|^SPOTIFY_CLIENT_SECRET=.*|SPOTIFY_CLIENT_SECRET=\"$SPEC\"|" config.env
+        else
+          printf 'SPOTIFY_CLIENT_SECRET="%s"\n' "$SPEC" >> config.env
+        fi
+        cat > dataset-metadata.json <<'META'
+        {
+          "title": "wzmlx-config",
+          "id": "djoshi7/wzmlx-config",
+          "licenses": [{"name": "CC0-1.0"}]
+        }
+        META
+        kaggle datasets version -p . -m "sync Spotify credentials from GitHub secrets" --dir-mode skip
+        echo "Spotify credentials synced into the Kaggle config dataset"
 
     - name: Determine action from trigger
       id: action
