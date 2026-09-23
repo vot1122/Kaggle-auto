@@ -1,0 +1,59 @@
+name: Bot Test
+
+# Runs one test scenario against the WZML-X bot using the test account
+# session stored in the private Kaggle config dataset. Results are
+# committed to bot_test/last-result.md (public, but no secrets in it).
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "ping | artist | ld"
+        required: true
+        default: "ping"
+        type: string
+      arg:
+        description: "optional argument (artist URL, /ld query)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bot-test
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install telethon kaggle
+
+      - name: Run test
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          kaggle datasets download djoshi7/wzmlx-config -p cfg --unzip
+          python bot_test/run_test.py --scenario "${{ inputs.scenario }}" --arg "${{ inputs.arg }}"
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "sarvam-test"
+          git config user.email "bot-test@users.noreply.github.com"
+          git add bot_test/last-result.md
+          git commit -m "bot-test results: ${{ inputs.scenario }}" && git push || echo "no result changes"

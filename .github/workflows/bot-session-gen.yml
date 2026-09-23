@@ -1,0 +1,55 @@
+name: Bot Test Session Gen
+
+# One-time bridge setup: generates a Telegram session for the test
+# account and stores it in the PRIVATE Kaggle config dataset.
+# Nothing sensitive is ever printed or committed to this repo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "request | complete"
+        required: true
+        default: "request"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bot-session
+
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install telethon kaggle
+
+      - name: Run session gen
+        env:
+          TG_TEST_PHONE: ${{ secrets.TG_TEST_PHONE }}
+          TG_LOGIN_CODE: ${{ secrets.TG_LOGIN_CODE }}
+          TG_TEST_2FA: ${{ secrets.TG_TEST_2FA }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          kaggle datasets download djoshi7/wzmlx-config -p cfg --unzip
+          python bot_test/session_gen.py --mode "${{ inputs.mode }}"
+
+      - name: Commit state
+        if: ${{ inputs.mode == 'request' }}
+        run: |
+          git config user.name "sarvam-test"
+          git config user.email "bot-test@users.noreply.github.com"
+          git add bot_test/state.json
+          git commit -m "session-gen state" && git push || echo "nothing to commit"
