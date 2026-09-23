@@ -1,39 +1,39 @@
-# bot test: cmd /dl https://open.spotify.com/track/52HEmNCNvewyByx7xofF0T
+# bot test: cmd /y https://www.jiosaavn.com/song/ishq/ATFTQQJgBGk
 
 ```
 [session] REPAIRED: 2 missing chars at pos 289 (restored '--')
 [client] wzgram (native WZ_)
 [me] 6726918562 CP smile
-[send] /dl https://open.spotify.com/track/52HEmNCNvewyByx7xofF0T
-[text] 1. Amrinder Gill - Mera Deewanapan
+[send] /y https://www.jiosaavn.com/song/ishq/ATFTQQJgBGk
+[text] 1. Amrinder Gill - Ishq
 
 Task By CP smile  ( #ID6726918562 )
 ┟ [□□□□□□□□□□□□] 0%
 ┠ Processed → 0B of 0B
 ┠ Status → Download
 ┠ Speed → 0B/s
-┠ Time → - of 32s ( 32s )
+┠ Time → - of 33s ( 33s )
 ┠ Engine → yt-dlp v2026.08.19
 ┠ In Mode → #ytdlp
-┠ Out Mode → #Leech
-┖ Stop → /c_1edabe58
+┠ Out Mode → #GDrive
+┖ Stop → /c_a868dae2
 
 ⌬ Bot Stats
-┟ CPU → 2.8% | F → 1.00TB [12.7%]
-┖ RAM → 4.8% | UP → 31m7s
+┟ CPU → 2.7% | F → 1.00TB [12.7%]
+┖ RAM → 5.0% | UP → 35m55s
 [buttons] ['📜 TStats', '♻️ Refresh']
-[file] Amrinder Gill - Mera Deewanapan.mp3 9.4MB
-[text] Amrinder Gill - Mera Deewanapan.mp3
+[text] Amrinder Gill - Ishq.mp3
 │
-┟ Task Size → 9.42MB
-┠ Time Taken → 1m5s
+┟ Task Size → 8.18MB
+┠ Time Taken → 58s
 ┠ In Mode → #ytdlp
-┠ Out Mode → #Leech
-┠ Total Files: 1
+┠ Out Mode → #GDrive
+│
+┟ Type → audio/mpeg
+┃
 ┖ Task By → @alonexboyy
 
-〶 Files List :
-1. Amrinder Gill - Mera Deewanapan.mp3
-┠ Get Media → Store Link | Share Link
-┖ Direct → Stream | Download
+〶 Action Performed :
+⋗ Cloud link(s) have been sent to User PM
+[buttons] ['☁️ Cloud Link']
 ```
