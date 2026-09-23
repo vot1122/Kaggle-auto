@@ -17,7 +17,9 @@ Scenarios:
              them (codec / bitrate / duration / tags); pass a flag (e.g. -z)
              as --arg to test zip delivery, or a URL to test another artist
   song    -- send a single track link, same checks as artist
-  cmd     -- send arbitrary text (e.g. /log, /help), capture the reply
+  cmd     -- send arbitrary text (e.g. /log, /help), capture the reply;
+             text files the bot sends (like logs) get their filtered tail
+             printed into the result
   ld      -- send /ld <query>, capture the lyrics card and its buttons
 """
 
@@ -25,6 +27,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -375,7 +378,8 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
     """Poll the bot chat for new messages. Ends after first_s with no
     message at all, quiet_s with no new messages, or cap_s overall.
     Audio/document uploads are classified as files (their captions are
-    logged as file names, not text cards)."""
+    logged as file names, not text cards). Text files (logs) sent by the
+    bot are downloaded and their filtered tail printed."""
     last_id = sent_id
     hard_end = time.time() + cap_s
     deadline = time.time() + first_s
@@ -397,9 +401,27 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                     try:
                         p = await adapter.download(m.raw, m.fname)
                         if p:
-                            info = ffprobe(p)
-                            info["file"] = os.path.basename(p)
-                            probed.append(info)
+                            _n = p.lower()
+                            if (_n.endswith((".log", ".txt", ".out"))
+                                    and os.path.getsize(p) < 5 * 1048576):
+                                txt = open(p, encoding="utf-8",
+                                           errors="ignore").read()
+                                lines = txt.splitlines()
+                                keep = [l for l in lines[-3000:]
+                                        if re.search(
+                                            r"WZFIX|ERROR|Traceback|"
+                                            r"Exception|zip|Zip|artist|"
+                                            r"fan-out|upload|Upload",
+                                            l)]
+                                log(f"[logfile {os.path.basename(p)} "
+                                    f"{len(lines)} lines, filtered "
+                                    f"{len(keep)}]")
+                                for l in keep[-120:]:
+                                    log("  " + l[:250])
+                            else:
+                                info = ffprobe(p)
+                                info["file"] = os.path.basename(p)
+                                probed.append(info)
                             os.remove(p)
                     except Exception as e:
                         log(f"[probe-error] {e}")
