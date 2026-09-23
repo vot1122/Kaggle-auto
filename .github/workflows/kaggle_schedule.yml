@@ -1,5 +1,5 @@
 # ============================================================
-# GitHub Actions Workflow - WZML-X Kaggle Schedule (v6)
+# GitHub Actions Workflow - WZML-X Kaggle Schedule (v6.1)
 # ============================================================
 #
 # SCHEDULE (IST, GitHub runs in UTC):
@@ -69,6 +69,9 @@ jobs:
   manage-kaggle:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      SPOTIFY_CID: ${{ secrets.SPOTIFY_CLIENT_ID }}
+      SPOTIFY_CSEC: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
 
     steps:
     - name: Checkout repository
@@ -99,10 +102,10 @@ jobs:
         pip install kaggle==1.6.17
 
     - name: Sync Spotify credentials to Kaggle config (optional)
-      if: ${{ secrets.SPOTIFY_CLIENT_ID != '' && secrets.SPOTIFY_CLIENT_SECRET != '' }}
+      if: ${{ env.SPOTIFY_CID != '' && env.SPOTIFY_CSEC != '' }}
       env:
-        SPID: ${{ secrets.SPOTIFY_CLIENT_ID }}
-        SPEC: ${{ secrets.SPOTIFY_CLIENT_SECRET }}
+        SPID: ${{ env.SPOTIFY_CID }}
+        SPEC: ${{ env.SPOTIFY_CSEC }}
         KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
         KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
       run: |
