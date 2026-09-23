@@ -1,8 +1,9 @@
 name: Bot Test
 
 # Runs one test scenario against the WZML-X bot using the test account
-# session stored in the private Kaggle config dataset. Results are
-# committed to bot_test/last-result.md (public, but no secrets in it).
+# session (TG_TEST_SESSION repo secret, or TEST_SESSION in the private
+# Kaggle config dataset). Results are committed to bot_test/last-result.md
+# (public, but no secrets in it).
 
 on:
   workflow_dispatch:
@@ -40,10 +41,11 @@ jobs:
       - name: Install deps
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-          pip install telethon kaggle
+          pip install telethon pyrofork kaggle
 
       - name: Run test
         env:
+          TG_TEST_SESSION: ${{ secrets.TG_TEST_SESSION }}
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
