@@ -57,5 +57,5 @@ jobs:
         run: |
           git config user.name "sarvam-test"
           git config user.email "bot-test@users.noreply.github.com"
-          git add bot_test/last-result.md
+          git add bot_test/last-result.md || true
           git commit -m "bot-test results: ${{ inputs.scenario }}" && git push || echo "no result changes"
