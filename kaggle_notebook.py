@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.50  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.51  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -3711,12 +3711,12 @@ def apply_userrepo_patches():
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.50"\n'
+                'WZFIX_BUILD = "v15.51"\n'
                 'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.50 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.50 running")
+        log("  r1: versions.py written (v15.51 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.51 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -5232,7 +5232,8 @@ def apply_userrepo_patches():
             "        # WZFIX music integration (v15.32): Spotify / JioSaavn /\n"
             "        # Apple Music links become ytsearch queries before parsing\n"
             "        from ..helper.wzfix.r3_music import pre_resolve\n"
-            "        if await pre_resolve(self.message, self.client, is_ytdl=True):\n"
+            "        if await pre_resolve(self.message, self.client,\n"
+            "                             is_ytdl=True, is_leech=self.is_leech):\n"
             "            return\n"
         )
         _j22_hook_ml = (
@@ -5534,7 +5535,8 @@ def apply_userrepo_patches():
                 "\n"
                 "            if is_music_url(self.link):\n"
                 "                if await pre_resolve(\n"
-                "                    self.message, self.client, is_ytdl=True\n"
+                "                    self.message, self.client,\n"
+                "                    is_ytdl=True, is_leech=self.is_leech\n"
                 "                ):\n"
                 "                    return\n"
                 "                _rt = self.message.reply_to_message\n"
