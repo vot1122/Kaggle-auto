@@ -13,12 +13,12 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "ping | artist | ld"
+        description: "ping | artist | song | cmd | ld"
         required: true
         default: "ping"
         type: string
       arg:
-        description: "optional argument (artist URL, /ld query)"
+        description: "optional argument (artist URL, /ld query, flags like -z)"
         required: false
         default: ""
         type: string
@@ -54,7 +54,7 @@ jobs:
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
           kaggle datasets download djoshi7/wzmlx-config -p cfg --unzip
-          python bot_test/run_test.py --scenario "${{ inputs.scenario }}" --arg "${{ inputs.arg }}"
+          python bot_test/run_test.py --scenario "${{ inputs.scenario }}" --arg="${{ inputs.arg }}"
 
       - name: Commit results
         if: always()
