@@ -6,8 +6,8 @@ Session source (first match wins):
   2. TEST_SESSION in the private Kaggle config dataset
 
 Supported formats: WZGram checksummed WZ_ strings (parsed natively by
-the wzgram library), Pyrogram/WZML-X-style strings and Telethon-style
-strings -- the format is auto-detected.
+the wzgram library; 2-char truncation auto-repaired via CRC),
+Pyrogram/WZML-X-style strings and Telethon-style strings -- auto-detected.
 
 Scenarios:
   ping    -- send /start, capture the reply (checks bot alive + allowance)
@@ -293,9 +293,60 @@ def normalize_session(s):
                "wzgram library itself")
 
 
+def repair_wz_session(s):
+    """Recover a WZGram WZ_ string that lost 2 characters somewhere
+    (truncated copy-paste). Uses the format's CRC32 checksum to find the
+    unique repair. Returns the repaired string, or the original if no
+    repair passes."""
+    import base64
+    import binascii
+    import struct
+    import zlib
+
+    ALPH = ("ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz" "0123456789-_")
+    V3_CRC_PACKED_SIZE = 326
+    TARGET = 435  # 326 bytes -> 435 chars (3-char tail group)
+    body = s[3:]
+    if len(body) == TARGET:
+        return s
+    if len(body) != TARGET - 2:
+        return s  # some other damage; let the library report it
+
+    def _dec(cand):
+        try:
+            raw = base64.urlsafe_b64decode(
+                cand + "=" * (-len(cand) % 4))
+        except (binascii.Error, ValueError):
+            return None
+        return raw
+
+    def _crc_ok(raw):
+        if len(raw) != V3_CRC_PACKED_SIZE:
+            return False
+        payload = raw[:-4]
+        stored = struct.unpack("<I", raw[-4:])[0]
+        return zlib.crc32(payload) == stored
+
+    order = [len(body)] + list(range(len(body)))  # end first, then start
+    for p in order:
+        prefix, suffix = body[:p], body[p:]
+        for a in ALPH:
+            for b in ALPH:
+                cand = prefix + a + b + suffix
+                raw = _dec(cand)
+                if raw and _crc_ok(raw):
+                    log(f"[session] REPAIRED: 2 missing chars at pos {p} "
+                        f"(restored '{a}{b}')")
+                    return "WZ_" + cand
+    log("[session] repair failed: no candidate passed the checksum")
+    return s
+
+
 def make_adapter(api_id, api_hash, session):
     s = session.strip()
     if s.startswith("WZ_"):
+        s = repair_wz_session(s)
         # native WZGram (Pyrogram fork) checksummed format -- only the
         # wzgram library itself can parse it; PyrogramAdapter is backed
         # by the wzgram-provided pyrogram module.
