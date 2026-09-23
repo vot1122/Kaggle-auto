@@ -1,0 +1,53 @@
+name: Deploy WZFIX Version
+
+# One-shot: applies tools patch to kaggle_notebook.py, commits it, then
+# pushes the notebook to Kaggle (new version = fresh session).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Apply patch
+        run: python deploy_patch.py
+
+      - name: Commit patched notebook
+        run: |
+          git config user.name "sarvam-test"
+          git config user.email "bot-test@users.noreply.github.com"
+          git add kaggle_notebook.py
+          git commit -m "wzfix: v15.51 (yl is_leech propagation)" && git push || echo "no changes"
+
+      - name: Install pinned Kaggle CLI
+        run: pip install kaggle==1.6.17
+
+      - name: Configure Kaggle credentials
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p ~/.kaggle
+          printf '{"username":"%s","key":"%s"}\n' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Push notebook to Kaggle
+        run: |
+          ls
+          kaggle kernels push -p .
+
+      - name: Kernel status
+        run: |
+          sleep 45
+          kaggle kernels status "${{ secrets.KAGGLE_NOTEBOOK }}" || true
