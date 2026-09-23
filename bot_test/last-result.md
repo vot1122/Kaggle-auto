@@ -12,21 +12,21 @@ Task By CP smile  ( #ID6726918562 )
 ┠ Processed → 0B of 0B
 ┠ Status → Download
 ┠ Speed → 0B/s
-┠ Time → - of 39s ( 39s )
+┠ Time → - of 53s ( 53s )
 ┠ Engine → yt-dlp v2026.08.19
 ┠ In Mode → #ytdlp
 ┠ Out Mode → #Leech
-┖ Stop → /c_e988a7df
+┖ Stop → /c_5930fad9
 
 ⌬ Bot Stats
-┟ CPU → 1.9% | F → 1.00TB [12.7%]
-┖ RAM → 4.3% | UP → 14m6s
+┟ CPU → 1.2% | F → 1.00TB [12.7%]
+┖ RAM → 4.1% | UP → 11m57s
 [buttons] ['📜 TStats', '♻️ Refresh']
 [file] Ishq.mp3 8.8MB
 [text] Ishq.mp3
 │
 ┟ Task Size → 8.85MB
-┠ Time Taken → 1m30s
+┠ Time Taken → 1m32s
 ┠ In Mode → #ytdlp
 ┠ Out Mode → #Leech
 ┠ Total Files: 1
