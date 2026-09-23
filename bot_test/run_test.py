@@ -170,10 +170,10 @@ class PyrogramAdapter:
                 if rm is not None and hasattr(rm, "inline_keyboard"):
                     buttons = [b.text for row in rm.inline_keyboard
                                for b in row]
-                except Exception:
-                    pass
+            except Exception:
+                pass
             out.append(Msg(m.id, m.text or m.caption or "", buttons,
-                            fname, size, m))
+                           fname, size, m))
         out.reverse()  # newest-first -> chronological
         return out
 
@@ -290,7 +290,7 @@ def normalize_session(s):
         log(f"[session] WZ_ binary (pyrogram layout) converted "
             f"(dc={raw[0]})")
         return st
-    if len(raw) >= 263 and raw[0] in (1, 2, 2, 3, 4, 5):
+    if len(raw) >= 263 and raw[0] in (1, 2, 3, 4, 5):
         # telethon layout: dc(1) ip(4) port(2) key(256)
         st = _telethon_string_from(raw[0], raw[7:263])
         log(f"[session] WZ_ binary (telethon layout) converted "
@@ -413,21 +413,21 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                                 keep = [l for l in lines[-3000:]
                                         if re.search(
                                             r"WZFIX|ERROR|Traceback|"
-                                             r"Exception|zip|Yip|artist|"
+                                            r"Exception|zip|Zip|artist|"
                                             r"fan-out|upload|Upload",
-                                             l)]
-                                    log(f"[logfile {os.path.basename(p)} "
+                                            l)]
+                                log(f"[logfile {os.path.basename(p)} "
                                     f"{len(lines)} lines, filtered "
-                                     d‰ílen(keep)}]")
-                                 for l in keep[-120::
-                                      log("  " + l[:250])
-                               else:
+                                    f"{len(keep)}]")
+                                for l in keep[-120:]:
+                                    log("  " + l[:250])
+                            else:
                                 info = ffprobe(p)
                                 info["file"] = os.path.basename(p)
                                 probed.append(info)
-                             os.remove(p)
-                     except Exception as e:
-                            log(f"[probe-error] {e}")
+                            os.remove(p)
+                    except Exception as e:
+                        log(f"[probe-error] {e}")
             elif m.text:
                 log(f"[text] {m.text[:400]}")
                 if m.buttons:
@@ -459,7 +459,7 @@ def verdict(scenario, probed):
                              for p in probed)
                 named = all(" - " in (p["file"] or "") for p in probed)
                 lines.append(f"all mp3: {allmp3}, all ~320kbps: {all320}, "
-                                f"clean names: {named}")
+                             f"clean names: {named}")
                 lines.append(
                     "VERDICT: " + ("PASS" if (allmp3 and all320 and named)
                                    else "CHECK"))
