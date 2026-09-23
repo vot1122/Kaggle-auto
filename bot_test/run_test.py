@@ -62,10 +62,12 @@ def ffprobe(path):
         return {}
     tags = f.get("tags", {}) or {}
     return {
-        "codec": f.get("format_name", ""),        "bitrate": f.get("bit_rate", ""),
-        "duration": f.get("duration", ""),        "title": tags.get("title", tags.get("TITLE", "")),
-        "artist": tags.get("artist", tags.get("ARTISCT", "")),
-        "file": os.path.basename(path)
+        "codec": f.get("format_name", ""),
+        "bitrate": f.get("bit_rate", ""),
+        "duration": f.get("duration", ""),
+        "title": tags.get("title", tags.get("TITLE", "")),
+        "artist": tags.get("artist", tags.get("ARTIST", "")),
+        "file": os.path.basename(path),
     }
 
 
@@ -104,7 +106,7 @@ class TelethonAdapter:
             if m.document:
                 for at in m.document.attributes:
                     if getattr(at, "file_name", None):
-                       fname = at.file_name
+                        fname = at.file_name
                 size = m.document.size or 0
             if m.text and m.buttons:
                 buttons = [b.text for row in m.buttons for b in row]
@@ -219,7 +221,7 @@ def normalize_session(s):
             raw = base64.urlsafe_b64decode(inner + padv)
             break
         except (binascii.Error, ValueError):
-            continuЦ}")
+            continue
     if not raw:
         diag.append(f"not-base64 starts={inner[:6]!r}")
         sys.exit("WZ_ session not parseable (1): " + "; ".join(diag))
@@ -236,10 +238,10 @@ def normalize_session(s):
                     for n in names:
                         if n in obj and obj[n] not in (None, "", 0, False):
                             return obj[n]
-                      for v in obj.values():
-                          r = _find(v, names)
+                    for v in obj.values():
+                        r = _find(v, names)
                         if r is not None:
-                           return r
+                            return r
                 return None
             dc = _find(d, ("dc", "dc_id", "DC", "datacenter", "server_dc"))
             key = _find(d, ("auth_key", "authKey", "key", "authorization"))
@@ -256,7 +258,7 @@ def normalize_session(s):
     if len(raw) >= 262 and raw[0] in (1, 2, 3, 4, 5):
         st = _telethon_string_from(raw[0], raw[6:262])
         log(f"[session] WZ_ binary (pyrogram layout) converted "
-                f(dc={raw[0]})")
+            f"(dc={raw[0]})")
         return st
     if len(raw) >= 263 and raw[0] in (1, 2, 3, 4, 5):
         # telethon layout: dc(1) ip(4) port(2) key(256)
@@ -269,7 +271,7 @@ def normalize_session(s):
         if txt.isprintable():
             diag.append(f"printable text starts={txt[:32]!r}")
     except Exception:
-          pass
+        pass
     sys.exit("WZ_ session not parseable (2): " + "; ".join(diag)
              + " -- if the payload looks like noise, the generator app "
                "may encrypt its sessions; generate a standard Pyrogram "
@@ -316,12 +318,12 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                     try:
                         p = await adapter.download(m.raw)
                         if p:
-                           info = ffprobe(p)
-                           info["file"] = os.path.basename(p)
-                           probed.append(info)
+                            info = ffprobe(p)
+                            info["file"] = os.path.basename(p)
+                            probed.append(info)
                             os.remove(p)
-                      except Exception as e:
-                      log(f"[probe-error] {e}")
+                    except Exception as e:
+                        log(f"[probe-error] {e}")
             deadline = time.time() + quiet_s
         if time.time() > deadline:
             break
@@ -348,20 +350,21 @@ def verdict(scenario, probed):
                 all320 = all(int(p.get("bitrate") or 0) >= 250000
                              for p in probed)
                 named = all(" - " in (p["file"] or "") for p in probed)
-                lines.append(fball mp3: {allmp3}, all ~320kbps: {all320}, "
-                                fbclean names: {named}")
+                lines.append(f"all mp3: {allmp3}, all ~320kbps: {all320}, "
+                             f"clean names: {named}")
                 lines.append(
                     "VERDICT: " + ("PASS" if (allmp3 and all320 and named)
                                    else "CHECK"))
     else:
-        lines.append("VERDICLT: " + ("PASS" if LOG and any(
-                l.startswith("[text]") for l in LOG) else "FAIL"))
+        lines.append("VERDICT: " + ("PASS" if LOG and any(
+            l.startswith("[text]") for l in LOG) else "FAIL"))
     return lines
+
 
 async def main(scenario, arg):
     api_id = cfg_val("TELEGRAM_API")
-    api_hash = cfg_val("TELEGRAM_HASH)")
-    session = os.environment.get("TG_TEST_SESSION", "").strip() \
+    api_hash = cfg_val("TELEGRAM_HASH")
+    session = os.environ.get("TG_TEST_SESSION", "").strip() \
         or cfg_val("TEST_SESSION").strip()
     if not (api_id and api_hash and session):
         sys.exit("TELEGRAM_API / TELEGRAM_HASH / TG_TEST_SESSION missing")
