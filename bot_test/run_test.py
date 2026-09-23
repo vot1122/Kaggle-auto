@@ -368,7 +368,9 @@ def make_adapter(api_id, api_hash, session):
 async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                   max_probe=10):
     """Poll the bot chat for new messages. Ends after first_s with no
-    message at all, quiet_s with no new messages, or cap_s overall."""
+    message at all, quiet_s with no new messages, or cap_s overall.
+    Audio/document uploads are classified as files (their captions are
+    logged as file names, not text cards)."""
     last_id = sent_id
     hard_end = time.time() + cap_s
     deadline = time.time() + first_s
@@ -384,11 +386,7 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
             if m.id <= last_id:
                 continue
             last_id = m.id
-            if m.text:
-                log(f"[text] {m.text[:400]}")
-                if m.buttons:
-                    log(f"[buttons] {m.buttons}")
-            elif m.size:
+            if m.size:
                 log(f"[file] {m.fname} {m.size / 1048576:.1f}MB")
                 if len(probed) < max_probe and m.size < 70 * 1048576:
                     try:
@@ -400,6 +398,10 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                             os.remove(p)
                     except Exception as e:
                         log(f"[probe-error] {e}")
+            elif m.text:
+                log(f"[text] {m.text[:400]}")
+                if m.buttons:
+                    log(f"[buttons] {m.buttons}")
             deadline = time.time() + quiet_s
         if time.time() > deadline:
             break
@@ -465,8 +467,8 @@ async def main(scenario, arg):
         url = arg
         if not url:
             sys.exit("song scenario needs --arg <track url>")
-        log(f"[send] {url}")
-        sid = await adapter.send(chat, url)
+        log(f"[send] /yl {url}")
+        sid = await adapter.send(chat, f"/yl {url}")
         probed = await collect(adapter, chat, sid, cap_s=480,
                                quiet_s=90, first_s=120)
         LOG.extend(verdict("artist", probed))
