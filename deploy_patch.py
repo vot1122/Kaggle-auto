@@ -1,12 +1,11 @@
-"""One-shot patch: v15.54 -> v15.55.
+"""One-shot patch: v15.55 -> v15.56.
 
-J-31 JioSaavn best-pick fix: v15.54's structured-JSON branch ran first
-and the generic "title" regex matched a nav item ("Home") in the page
-JSON, so the search went out as "Amrinder Gill - Home" and the wrong
-song was picked. The og:title branch (JioSaavn's stable
-"Song - Artist - Download or Listen Free - JioSaavn" pattern) now runs
-FIRST; the JSON fallback only accepts specific keys ("song_title",
-"primary_artists", "singers", "artist").
+J-32 JioSaavn site-name guard: the bot's fetch of some song pages gets
+the SHORT og:title variant ("Ishq - JioSaavn"), so the site name became
+the artist and the search went out as "JioSaavn - Ishq" (wrong song).
+Site/nav tokens are now blacklisted as title/artist candidates; the
+JSON primary_artists fallback (proven correct: "Amrinder Gill") fills
+the artist.
 """
 
 import ast
@@ -20,7 +19,14 @@ import tempfile
 P = "kaggle_notebook.py"
 s = open(P, encoding="utf-8").read()
 
-NEW_FN = '''async def _resolve_jiosaavn(url, mmax=10):
+NEW_FN = '''# never accept these as song title or artist (site chrome / nav items)
+_SAAVN_STOP = {
+    "jiosaavn", "saavn", "song", "songs", "home", "music", "album",
+    "artist", "playlist", "download",
+}
+
+
+async def _resolve_jiosaavn(url, mmax=10):
     final, html = url, ""
     try:
         final, html = await _fetch(url)
@@ -55,9 +61,15 @@ NEW_FN = '''async def _resolve_jiosaavn(url, mmax=10):
                 if p.strip()
             ]
             if len(parts) >= 2:
-                title = parts[0]
-                artist = parts[-1]
-                break
+                # "Ishq - JioSaavn" (short og:title variant) carries the
+                # site name as the last segment — never an artist
+                _cand_t, _cand_a = parts[0], parts[-1]
+                if _cand_t.lower() not in _SAAVN_STOP:
+                    title = _cand_t
+                if _cand_a.lower() not in _SAAVN_STOP:
+                    artist = _cand_a
+                if title or artist:
+                    break
             elif not title:
                 title = seg
         # structured JSON fallback — specific keys only (a generic "title"
@@ -71,7 +83,7 @@ NEW_FN = '''async def _resolve_jiosaavn(url, mmax=10):
                 or re.search(r'"singers"\s*:\s*"([^"]*)"', html)
                 or re.search(r'"artist"\s*:\s*"([^"]*)"', html)
             )
-            if m:
+            if m and _clean(m.group(1)).lower() not in _SAAVN_STOP:
                 artist = artist or _clean(m.group(1))
         # strip parenthetical junk from the song name ("Ishq (Full Song)" -> "Ishq")
         if title:
@@ -147,10 +159,10 @@ block = "WZFIX_R3_MUSIC_B64 = (\n" + "".join(
 s = s[:m.start()] + block + s[m.end():]
 
 # ---- bump the version ----
-n = s.count("v15.54")
-s = s.replace("v15.54", "v15.55")
+n = s.count("v15.55")
+s = s.replace("v15.55", "v15.56")
 
 with open(P, "w", encoding="utf-8") as f:
     f.write(s)
 py_compile.compile(P, doraise=True)
-print(f"patch OK: J-31 jiosaavn og:title-first fix, {n} markers bumped to v15.55")
+print(f"patch OK: J-32 jiosaavn site-name guard, {n} markers bumped to v15.56")
