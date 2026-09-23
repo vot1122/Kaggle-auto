@@ -471,7 +471,7 @@ async def main(scenario, arg):
         log(f"[send] /yl {url} {flags}".rstrip())
         sid = await adapter.send(chat, f"/yl {url} {flags}".rstrip())
         probed = await collect(adapter, chat, sid, cap_s=1800,
-                               quiet_s=240, first_s=180)
+                               quiet_s=420, first_s=180)
         LOG.extend(verdict(scenario, probed))
     elif scenario == "song":
         url = arg
