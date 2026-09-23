@@ -20,6 +20,9 @@ Scenarios:
   cmd     -- send arbitrary text (e.g. /log, /help), capture the reply;
              text files the bot sends (like logs) get their filtered tail
              printed into the result
+  peek    -- list the test account's recent dialogs to find where delivered
+             files actually landed (the hyper uploader may deliver via a
+             different peer than the bot PM)
   ld      -- send /ld <query>, capture the lyrics card and its buttons
 """
 
@@ -510,6 +513,36 @@ async def main(scenario, arg):
         sid = await adapter.send(chat, text)
         await collect(adapter, chat, sid, cap_s=240, quiet_s=30,
                       first_s=60)
+    elif scenario == "peek":
+        # list the test account's recent dialogs to find where files
+        # actually landed (the hyper uploader may deliver via a
+        # different peer than the bot PM)
+        me_id = me.id
+        seen = 0
+        async for d in adapter.c.get_dialogs(limit=20):
+            c = d.chat
+            title = getattr(c, "first_name", None) or getattr(c, "title", "") or ""
+            uname = getattr(c, "username", "") or ""
+            last = d.top_message if d.top_message is not None else None
+            if last is None or getattr(c, "id", 0) == me_id:
+                continue
+            last_from = getattr(getattr(last, "from_user", None), "username", "") or ""
+            fname, size = "", 0
+            doc = getattr(last, "document", None)
+            aud = getattr(last, "audio", None)
+            if doc:
+                fname = doc.file_name or ""
+                size = doc.file_size or 0
+            elif aud:
+                fname = aud.file_name or ""
+                size = aud.file_size or 0
+            if fname or seen < 8:
+                seen += 1
+                log(f"[dialog] id={c.id} {title} @{uname} "
+                    f"last=<{last.id}> by @{last_from} "
+                    f"file={fname!r} {size / 1048576:.1f}MB "
+                    f"text={(last.text or last.caption or '')[:60]!r}")
+        await asyncio.sleep(2)
     elif scenario == "ld":
         q = arg or "Locked In Bhalwaan"
         log(f"[send] /ld {q}")
