@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Bot test bridge -- runs one scenario against the WZML-X bot using the
 test account session and writes the outcome to bot_test/last-result.md.
 
@@ -11,8 +12,8 @@ Pyrogram/WZML-X-style strings and Telethon-style strings -- auto-detected.
 
 Scenarios:
   ping    -- send /start, capture the reply (checks bot alive + allowance)
-  artist  -- send a Spotify artist link, wait for the preview card and the
-             batch delivery, download a sample of the files and ffprobe
+  artist  -- send /yl + Spotify artist link, wait for the preview card and
+             the batch delivery, download a sample of the files and ffprobe
              them (codec / bitrate / duration / tags)
   song    -- send a single track link, same checks as artist
   cmd     -- send arbitrary text (e.g. /log, /help), capture the reply
@@ -454,8 +455,9 @@ async def main(scenario, arg):
     elif scenario == "artist":
         url = arg or ("https://open.spotify.com/artist/"
                       "1x02ug1CLkx7mrQP9FRswh")
-        log(f"[send] {url}")
-        sid = await adapter.send(chat, url)
+        # bare links are ignored by design (commands only) -- use /yl
+        log(f"[send] /yl {url}")
+        sid = await adapter.send(chat, f"/yl {url}")
         probed = await collect(adapter, chat, sid, cap_s=1800,
                                quiet_s=240, first_s=180)
         LOG.extend(verdict(scenario, probed))
