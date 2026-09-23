@@ -1,11 +1,12 @@
-"""One-shot patch: v15.53 -> v15.54.
+"""One-shot patch: v15.54 -> v15.55.
 
-J-30 JioSaavn song-link fix: the resolver used the raw og:title
-("Ishq (Full Song) - Amrinder Gill - Download or Listen Free - JioSaavn")
-as the ytsearch query, so the best-pick matched the wrong video and the
-delivered file had a garbage name. Now the /song/ branch parses the
-og:title patterns, strips JioSaavn boilerplate, extracts artist + clean
-song name, and falls back to structured JSON and the URL slug.
+J-31 JioSaavn best-pick fix: v15.54's structured-JSON branch ran first
+and the generic "title" regex matched a nav item ("Home") in the page
+JSON, so the search went out as "Amrinder Gill - Home" and the wrong
+song was picked. The og:title branch (JioSaavn's stable
+"Song - Artist - Download or Listen Free - JioSaavn" pattern) now runs
+FIRST; the JSON fallback only accepts specific keys ("song_title",
+"primary_artists", "singers", "artist").
 """
 
 import ast
@@ -29,54 +30,53 @@ NEW_FN = '''async def _resolve_jiosaavn(url, mmax=10):
     _up = url.split("?")[0]
     if "/song/" in _fp or "/song/" in _up:
         title = artist = None
-        # structured JSON first (most exact)
-        m = re.search(r'"song_title"\\s*:\\s*"([^"]+)"', html) or re.search(
-            r'"title"\\s*:\\s*"([^"]+)"', html
-        )
-        if m:
-            title = _clean(m.group(1))
-        m = (
-            re.search(r'"primary_artists"\\s*:\\s*"([^"]*)"', html)
-            or re.search(r'"singers"\\s*:\\s*"([^"]*)"', html)
-            or re.search(r'"artist"\\s*:\\s*"([^"]*)"', html)
-            or re.search(r'"artistHln"\\s*:\\s*"([^"]*)"', html)
-        )
-        if m:
-            artist = _clean(m.group(1))
-        # og:title / <title>: "Song - Artist - Download or Listen Free - JioSaavn"
-        # or the older "Song - Song Download from Album @ JioSaavn"
+        # og:title / <title> FIRST — JioSaavn's stable pattern
+        # "Song - Artist - Download or Listen Free - JioSaavn" (or the older
+        # "Song - Song Download from Album @ JioSaavn")
+        for pat in (
+            r'property="og:title"\s+content="([^"]+)"',
+            r"<title>([^<]+)</title>",
+        ):
+            m = re.search(pat, html)
+            if not m:
+                continue
+            t = _clean(m.group(1))
+            t = re.split(r"\s*[-\u2013\u2014]\s*Song Download\b", t)[0]
+            seg = re.split(
+                r"\s*[-\u2013\u2014]\s*Download or Listen Free\b", t
+            )[0]
+            seg = re.split(r"\s*@\s*JioSaavn\b", seg)[0].strip()
+            seg = re.sub(r"\s*\|\s*JioSaavn\s*$", "", seg).strip()
+            if not seg:
+                continue
+            parts = [
+                p.strip()
+                for p in re.split(r"\s*[-\u2013\u2014]\s*", seg)
+                if p.strip()
+            ]
+            if len(parts) >= 2:
+                title = parts[0]
+                artist = parts[-1]
+                break
+            elif not title:
+                title = seg
+        # structured JSON fallback — specific keys only (a generic "title"
+        # matches nav/menu items like "Home" in the page JSON)
         if not (title and artist):
-            for pat in (
-                r'property="og:title"\\s+content="([^"]+)"',
-                r"<title>([^<]+)</title>",
-            ):
-                m = re.search(pat, html)
-                if not m:
-                    continue
-                t = _clean(m.group(1))
-                t = re.split(r"\\s*[-\\u2013\\u2014]\\s*Song Download\\b", t)[0]
-                seg = re.split(
-                    r"\\s*[-\\u2013\\u2014]\\s*Download or Listen Free\\b", t
-                )[0]
-                seg = re.split(r"\\s*@\\s*JioSaavn\\b", seg)[0].strip()
-                seg = re.sub(r"\\s*\\|\\s*JioSaavn\\s*$", "", seg).strip()
-                if not seg:
-                    continue
-                parts = [
-                    p.strip()
-                    for p in re.split(r"\\s*[-\\u2013\\u2014]\\s*", seg)
-                    if p.strip()
-                ]
-                if len(parts) >= 2:
-                    title = title or parts[0]
-                    artist = artist or parts[-1]
-                    break
-                elif not title:
-                    title = seg
-        # strip parenthetical junk ("Ishq (Full Song)" -> "Ishq")
+            m = re.search(r'"song_title"\s*:\s*"([^"]+)"', html)
+            if m:
+                title = title or _clean(m.group(1))
+            m = (
+                re.search(r'"primary_artists"\s*:\s*"([^"]*)"', html)
+                or re.search(r'"singers"\s*:\s*"([^"]*)"', html)
+                or re.search(r'"artist"\s*:\s*"([^"]*)"', html)
+            )
+            if m:
+                artist = artist or _clean(m.group(1))
+        # strip parenthetical junk from the song name ("Ishq (Full Song)" -> "Ishq")
         if title:
             title = re.sub(
-                r"\\s*\\([^)]*(?:full\\s*song|official|lyrical|audio|video|hd)[^)]*\\)\\s*$",
+                r"\s*\([^)]*(?:full\s*song|official|lyrical|audio|video|hd)[^)]*\)\s*$",
                 "", title, flags=re.I,
             ).strip()
         # slug fallback: /song/ishq/ID
@@ -91,14 +91,14 @@ NEW_FN = '''async def _resolve_jiosaavn(url, mmax=10):
         return None
     # artist / album / featured pages
     name = None
-    m = re.search(r'property="og:title"\\s+content="([^"]+)"', html)
+    m = re.search(r'property="og:title"\s+content="([^"]+)"', html)
     if m:
         name = _clean(m.group(1))
     if not name:
         m = re.search(r"<title>([^<]+)</title>", html)
         if m:
             t = _clean(m.group(1)).replace("@ JioSaavn", "")
-            t = re.split(r"\\s*[-\\u2013\\u2014]\\s*(?:Songs|Albums|Album)", t)[0].strip()
+            t = re.split(r"\s*[-\u2013\u2014]\s*(?:Songs|Albums|Album)", t)[0].strip()
             name = t or None
     if not name:
         name = _slug_query(final)
@@ -106,7 +106,8 @@ NEW_FN = '''async def _resolve_jiosaavn(url, mmax=10):
         if "/artist/" in (_fp + _up):
             return f"ytsearch{mmax}:{name} songs audio"
         return f"ytsearch{mmax}:{name} audio"
-    raise MusicUnsupported("Couldn't read this JioSaavn link")'''
+    raise MusicUnsupported("Couldn't read this JioSaavn link")
+'''
 
 # ---- locate and decode the WZFIX_R3_MUSIC_B64 block ----
 m = re.search(r"WZFIX_R3_MUSIC_B64 = \((.*?)\n\)", s, re.S)
@@ -146,10 +147,10 @@ block = "WZFIX_R3_MUSIC_B64 = (\n" + "".join(
 s = s[:m.start()] + block + s[m.end():]
 
 # ---- bump the version ----
-n = s.count("v15.53")
-s = s.replace("v15.53", "v15.54")
+n = s.count("v15.54")
+s = s.replace("v15.54", "v15.55")
 
 with open(P, "w", encoding="utf-8") as f:
     f.write(s)
 py_compile.compile(P, doraise=True)
-print(f"patch OK: J-30 jiosaavn resolver fix, {n} markers bumped to v15.54")
+print(f"patch OK: J-31 jiosaavn og:title-first fix, {n} markers bumped to v15.55")
