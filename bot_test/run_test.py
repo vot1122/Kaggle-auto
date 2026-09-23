@@ -215,17 +215,29 @@ def normalize_session(s):
     import base64
     import binascii
     import json as _json
+
+    def _try_decode(x):
+        for cand in (x, x.replace("+", "-").replace("/", "_")):
+            for pad in range(4):
+                try:
+                    r = base64.urlsafe_b64decode(cand + "=" * pad)
+                    if len(r) >= 100:
+                        return r
+                except (binascii.Error, ValueError):
+                    continue
+        return None
+
     raw = None
-    for padv in ("", "==", "="):
-        try:
-            raw = base64.urlsafe_b64decode(inner + padv)
+    for cand, desc in ((inner, "as-is"), (inner[1:], "strip-first"),
+                        (inner[:-1], "strip-last")):
+        raw = _try_decode(cand)
+        if raw:
+            diag.append(f"decoded {len(raw)}B from {desc} "
+                        f"head={raw[:4].hex()}")
             break
-        except (binascii.Error, ValueError):
-            continue
     if not raw:
         diag.append(f"not-base64 starts={inner[:6]!r}")
         sys.exit("WZ_ session not parseable (1): " + "; ".join(diag))
-    diag.append(f"decoded {len(raw)}B head={raw[:4].hex()}")
     if raw[:1] in (b"{", b"["):
         try:
             d = _json.loads(raw)
