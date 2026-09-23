@@ -1,11 +1,11 @@
-"""One-shot patch: v15.56 -> v15.57.
+"""One-shot patch: v15.57 -> v15.58.
 
-J-33 JioSaavn meta-description fallback: v15.56's page fetch (short
-og:title variant) carried no primary_artists JSON either, so the search
-went out as just "Ishq" and the best-pick returned the wrong song. The
-SEO meta description ("Ishq is a Punjabi language song and is sung by
-Amrinder Gill.") is present in every page variant and now fills both
-title and artist when og:title/JSON come up short.
+J-34 JioSaavn web API first: HTML page variants served to the bot are
+inconsistent (full page / short og shell / empty), so title/artist
+parsing kept missing. The song token in the URL now queries
+api.php?__call=webapi.get directly — stable structured data
+(subtitle "Artist - Song", primary_artists). HTML fallbacks stay for
+when the API is unreachable.
 """
 
 import ast
@@ -36,6 +36,41 @@ async def _resolve_jiosaavn(url, mmax=10):
     _up = url.split("?")[0]
     if "/song/" in _fp or "/song/" in _up:
         title = artist = None
+        # JioSaavn's own web API — stable structured data for the token
+        # (the HTML page variant the fetcher gets is inconsistent)
+        m = re.search(r"/song/[a-z0-9-]+/([A-Za-z0-9_,\-]+)", _up or _fp)
+        if m:
+            try:
+                _api = (
+                    "https://www.jiosaavn.com/api.php?__call=webapi.get"
+                    f"&token={m.group(1)}&type=song&ctx=web6dot0"
+                    "&api_version=4&_format=json"
+                )
+                _, _j = await _fetch(_api)
+                mm = re.search(r'"subtitle"\s*:\s*"([^"]+)"', _j)
+                if mm:
+                    _parts = [
+                        p.strip()
+                        for p in _clean(mm.group(1)).split(" - ")
+                        if p.strip()
+                    ]
+                    if len(_parts) >= 2:
+                        artist = _parts[0]
+                        title = " - ".join(_parts[1:])
+                    elif _parts:
+                        title = _parts[0]
+                if not artist:
+                    mm = re.search(
+                        r'"primary_artists":\[\{[^}]*?"name":"([^"]+)"', _j
+                    )
+                    if mm:
+                        artist = _clean(mm.group(1))
+                if not title:
+                    mm = re.search(r'"title"\s*:\s*"([^"]+)"', _j)
+                    if mm and _clean(mm.group(1)).lower() not in _SAAVN_STOP:
+                        title = _clean(mm.group(1))
+            except Exception:
+                pass
         # og:title / <title> FIRST — JioSaavn's stable pattern
         # "Song - Artist - Download or Listen Free - JioSaavn" (or the older
         # "Song - Song Download from Album @ JioSaavn")
@@ -179,10 +214,10 @@ block = "WZFIX_R3_MUSIC_B64 = (\n" + "".join(
 s = s[:m.start()] + block + s[m.end():]
 
 # ---- bump the version ----
-n = s.count("v15.56")
-s = s.replace("v15.56", "v15.57")
+n = s.count("v15.57")
+s = s.replace("v15.57", "v15.58")
 
 with open(P, "w", encoding="utf-8") as f:
     f.write(s)
 py_compile.compile(P, doraise=True)
-print(f"patch OK: J-33 jiosaavn meta-description fallback, {n} markers bumped to v15.57")
+print(f"patch OK: J-34 jiosaavn web-api-first, {n} markers bumped to v15.58")
