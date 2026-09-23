@@ -117,9 +117,11 @@ class TelethonAdapter:
             out.append(Msg(m.id, m.text or "", buttons, fname, size, m))
         return out
 
-    async def download(self, raw):
+    async def download(self, raw, fname=None):
         os.makedirs(DL_DIR, exist_ok=True)
-        return await raw.download_media(file=DL_DIR)
+        target = os.path.join(DL_DIR, (fname or "file.bin")
+                              .replace("/", "_")[:180])
+        return await raw.download_media(file=target)
 
 
 class PyrogramAdapter:
@@ -168,9 +170,11 @@ class PyrogramAdapter:
         out.reverse()  # newest-first -> chronological
         return out
 
-    async def download(self, raw):
+    async def download(self, raw, fname=None):
         os.makedirs(DL_DIR, exist_ok=True)
-        return await self.c.download_media(raw, file_name=DL_DIR)
+        target = os.path.join(DL_DIR, (fname or "file.bin")
+                              .replace("/", "_")[:180])
+        return await self.c.download_media(raw, file_name=target)
 
 
 DC_IPS = {1: "149.154.175.53", 2: "149.154.167.51",
@@ -390,7 +394,7 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                 log(f"[file] {m.fname} {m.size / 1048576:.1f}MB")
                 if len(probed) < max_probe and m.size < 70 * 1048576:
                     try:
-                        p = await adapter.download(m.raw)
+                        p = await adapter.download(m.raw, m.fname)
                         if p:
                             info = ffprobe(p)
                             info["file"] = os.path.basename(p)
