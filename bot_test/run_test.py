@@ -14,7 +14,8 @@ Scenarios:
   ping    -- send /start, capture the reply (checks bot alive + allowance)
   artist  -- send /yl + Spotify artist link, wait for the preview card and
              the batch delivery, download a sample of the files and ffprobe
-             them (codec / bitrate / duration / tags)
+             them (codec / bitrate / duration / tags); pass a flag (e.g. -z)
+             as --arg to test zip delivery, or a URL to test another artist
   song    -- send a single track link, same checks as artist
   cmd     -- send arbitrary text (e.g. /log, /help), capture the reply
   ld      -- send /ld <query>, capture the lyrics card and its buttons
@@ -459,11 +460,16 @@ async def main(scenario, arg):
         sid = await adapter.send(chat, "/start")
         await collect(adapter, chat, sid, cap_s=120, quiet_s=25, first_s=60)
     elif scenario == "artist":
-        url = arg or ("https://open.spotify.com/artist/"
-                      "1x02ug1CLkx7mrQP9FRswh")
+        url = ("https://open.spotify.com/artist/"
+               "1x02ug1CLkx7mrQP9FRswh")
+        flags = ""
+        if arg and arg.startswith("-"):
+            flags = arg  # e.g. "-z" -> zip delivery
+        elif arg:
+            url = arg
         # bare links are ignored by design (commands only) -- use /yl
-        log(f"[send] /yl {url}")
-        sid = await adapter.send(chat, f"/yl {url}")
+        log(f"[send] /yl {url} {flags}".rstrip())
+        sid = await adapter.send(chat, f"/yl {url} {flags}".rstrip())
         probed = await collect(adapter, chat, sid, cap_s=1800,
                                quiet_s=240, first_s=180)
         LOG.extend(verdict(scenario, probed))
