@@ -14,6 +14,8 @@ Scenarios:
   artist  -- send a Spotify artist link, wait for the preview card and the
              batch delivery, download a sample of the files and ffprobe
              them (codec / bitrate / duration / tags)
+  song    -- send a single track link, same checks as artist
+  cmd     -- send arbitrary text (e.g. /log, /help), capture the reply
   ld      -- send /ld <query>, capture the lyrics card and its buttons
 """
 
@@ -457,6 +459,21 @@ async def main(scenario, arg):
         probed = await collect(adapter, chat, sid, cap_s=1800,
                                quiet_s=240, first_s=180)
         LOG.extend(verdict(scenario, probed))
+    elif scenario == "song":
+        url = arg
+        if not url:
+            sys.exit("song scenario needs --arg <track url>")
+        log(f"[send] {url}")
+        sid = await adapter.send(chat, url)
+        probed = await collect(adapter, chat, sid, cap_s=480,
+                               quiet_s=90, first_s=120)
+        LOG.extend(verdict("artist", probed))
+    elif scenario == "cmd":
+        text = arg or "/help"
+        log(f"[send] {text}")
+        sid = await adapter.send(chat, text)
+        await collect(adapter, chat, sid, cap_s=240, quiet_s=30,
+                      first_s=60)
     elif scenario == "ld":
         q = arg or "Locked In Bhalwaan"
         log(f"[send] /ld {q}")
