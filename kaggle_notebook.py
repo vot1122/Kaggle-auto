@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.65  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.66  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2024,7 +2024,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.65) — per-link stream passwords.
+# WZFIX Round 5 (v15.66) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -3936,7 +3936,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.65 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.66 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4110,7 +4110,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.65)\n'
+                '\n    # WZFIX r5 streampass (v15.66)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4135,7 +4135,7 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.65 Round 6: /start user registry.
+    # Kaggle addition M — v15.66 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4207,7 +4207,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
-    # Kaggle addition N — v15.65 Round 6b: stream page auth-loop fix.
+    # Kaggle addition N — v15.66 Round 6b: stream page auth-loop fix.
     # The stream page sent its boot probe and the video/download src
     # WITHOUT the auth token for normal (non-user) links, so a correct
     # password just reloaded into the same 401 — an endless password
@@ -4300,6 +4300,392 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6b FAILED — {e}", "ERROR")
 
+    # Kaggle addition O — v15.66 Round 9: dashboard reliability fixes
+    # (login form always visible — no more black page, connection banner
+    # with auto-retry, no-flicker section updates, history diff,
+    # no-store headers) + stream auth loop-breaker with diagnostics +
+    # full logging (auth attempts, gate denials, page serves, log-group
+    # alerts on wrong passwords). Idempotent: markers are checked.
+    def _r9_rep(src, old, new, tag):
+        c = src.count(old)
+        if c != 1:
+            raise AssertionError("%s: anchor x%d" % (tag, c))
+        return src.replace(old, new)
+
+    try:
+        # ---- O-A: r2_web.py (dashboard) ----
+        _o_r2 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r2_web.py")
+        with open(_o_r2, "r", encoding="utf-8") as _f:
+            _src = _f.read()
+        if 'id="connBar"' in _src:
+            log("  r9: r2_web already patched")
+        else:
+            _src = _r9_rep(_src, '<div id="login" class="login-box hidden">',
+                          '<div id="login" class="login-box">', "O-1")
+            _src = _r9_rep(_src, '<div id="toast"></div>',
+                          '<div id="toast"></div>\n<div id="connBar" class="hidden"></div>', "O-2a")
+            _src = _r9_rep(_src, '.hidden{display:none}',
+                          '.hidden{display:none}\n#connBar{position:fixed;left:0;right:0;bottom:0;'
+                          'padding:9px 14px;background:#c0392b;color:#fff;font-size:13px;'
+                          'text-align:center;z-index:9999}', "O-2b")
+            _src = _r9_rep(_src, 'function toast(m){',
+                          'function connBar(m){var b=$("connBar");if(!b)return;'
+                          'if(m){b.textContent=m;b.classList.remove("hidden")}'
+                          'else{b.classList.add("hidden")}}\n'
+                          'window.onerror=function(msg,src,ln){connBar("Page error: "+msg+" (line "+ln+")");return false};\n'
+                          'function toast(m){', "O-2c")
+            _src = _r9_rep(_src,
+                          'function api(p,o){return fetch("/wzadmin/api/"+p,o?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o)}:undefined).then(function(r){return r.json().then(function(j){j._s=r.status;return j})})}',
+                          'function api(p,o){return fetch("/wzadmin/api/"+p,o?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(o)}:undefined)'
+                          '.then(function(r){connBar(null);return r.json().then(function(j){j._s=r.status;return j})})'
+                          '.catch(function(e){connBar("\\u26a0 Server unreachable \\u2014 retrying\\u2026");throw e})}', "O-2d")
+            _src = _r9_rep(_src, 'function refresh(){return api("state").then(function(j){\n  if(j._s===401){',
+                          'window._lastState=null;window._sec={};\n'
+                          'function setSec(id,html){if(window._sec[id]===html)return;'
+                          'window._sec[id]=html;var e=$(id);if(e&&e.innerHTML!==html)e.innerHTML=html}\n'
+                          'function refresh(){return api("state").then(function(j){\n'
+                          '  var _sj=JSON.stringify(j);if(_sj===window._lastState)return;'
+                          'window._lastState=_sj;\n'
+                          '  if(j._s===401){window._lastState=null;', "O-3a")
+            _src = _r9_rep(_src, '  $("stats").innerHTML=', '  setSec("stats",', "O-3b1")
+            _src = _r9_rep(_src,
+                          "'<div class=\"stat\"><div class=\"v\">'+t.users+'</div><div class=\"k\">Users</div></div>';",
+                          "'<div class=\"stat\"><div class=\"v\">'+t.users+'</div><div class=\"k\">Users</div></div>');", "O-3b1b")
+            _src = _r9_rep(_src,
+                          '  $("tasks").innerHTML=T||\'<div class="card muted">No active tasks. Peace.</div>\';',
+                          '  setSec("tasks",T||\'<div class="card muted">No active tasks. Peace.</div>\');', "O-3b2")
+            _src = _r9_rep(_src,
+                          '  $("users").innerHTML=U||\'<div class="card muted">No users yet.</div>\';',
+                          '  setSec("users",U||\'<div class="card muted">No users yet.</div>\');', "O-3b3")
+            _src = _r9_rep(_src,
+                          '  $("access").innerHTML=A||\'<div class="card muted">No /start users recorded yet.</div>\';',
+                          '  setSec("access",A||\'<div class="card muted">No /start users recorded yet.</div>\');', "O-3b4")
+            _src = _r9_rep(_src,
+                          'function renderHist(uid,scroll){\n  api("history?uid="+uid).then(function(j){',
+                          'function renderHist(uid,scroll){\n  api("history?uid="+uid).then(function(j){\n'
+                          '    var _hj=uid+":"+JSON.stringify(j.items||[]);'
+                          'if(_hj===window._histLast)return;window._histLast=_hj;', "O-3c")
+            _src = _r9_rep(_src, '    return web.Response(text=_PAGE, content_type="text/html")',
+                          '    return web.Response(\n'
+                          '        text=_PAGE, content_type="text/html",\n'
+                          '        headers={"Cache-Control": "no-store, must-revalidate"},\n'
+                          '    )', "O-4a")
+            _src = _r9_rep(_src,
+                          '    if path.endswith("/state"):\n        return web.json_response(await _state())',
+                          '    if path.endswith("/state"):\n'
+                          '        _r = web.json_response(await _state())\n'
+                          '        _r.headers["Cache-Control"] = "no-store"\n'
+                          '        return _r', "O-4b")
+            # O-5: fix addition-M quoting regression (black page root cause)
+            for _actn in ("userauth", "usersudo", "userbl"):
+                _src = _r9_rep(
+                    _src,
+                    "act({action:'" + _actn + "',uid:'+u.uid+',v:'",
+                    "act({action:\\\\'" + _actn + "\\\\',uid:'+u.uid+',v:'",
+                    "O-5-" + _actn,
+                )
+            with open(_o_r2, "w", encoding="utf-8") as _f:
+                _f.write(_src)
+            _r = subprocess.run(
+                [sys.executable, "-m", "py_compile", _o_r2],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r.returncode == 0:
+                log("  r9: r2_web patched (black-page fix, no-flicker, banner)")
+            else:
+                log(f"  r9: r2_web FAILED compile — {(_r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r9: r2_web patch FAILED — {e}", "ERROR")
+
+    try:
+        # ---- O-B: stall_ui.js (loop-breaker + diagnostics) ----
+        _o_sui = os.path.join(WZMLX_DIR, "web/templates/stall_ui.js")
+        with open(_o_sui, "r", encoding="utf-8") as _f:
+            _js = _f.read()
+        if "_loopInc" in _js:
+            log("  r9: stall_ui already patched")
+        else:
+            _js = _r9_rep(_js, "  function getToken() {",
+                          "  // r8 loop-breaker helpers\n"
+                          "  function _loopCount() {\n"
+                          "    try { return parseInt(sessionStorage.getItem(\"wzml_auth_loop\") || \"0\") || 0; }\n"
+                          "    catch (e) { return window._wzLoop || 0; }\n"
+                          "  }\n"
+                          "  function _loopInc() {\n"
+                          "    var n = _loopCount() + 1;\n"
+                          "    try { sessionStorage.setItem(\"wzml_auth_loop\", String(n)); } catch (e) { window._wzLoop = n; }\n"
+                          "    return n;\n"
+                          "  }\n"
+                          "  function _loopReset() {\n"
+                          "    try { sessionStorage.removeItem(\"wzml_auth_loop\"); } catch (e) {}\n"
+                          "    window._wzLoop = 0;\n"
+                          "  }\n"
+                          "  function _diagText() {\n"
+                          "    return \"token=\" + (window.location.pathname.split(\"/\").pop() || \"\") +\n"
+                          "      \" urlAuth=\" + (urlParams().get(\"auth\") ? \"yes\" : \"no\") +\n"
+                          "      \" stored=\" + (getToken() ? \"yes\" : \"no\") +\n"
+                          "      \" loops=\" + _loopCount() +\n"
+                          "      \" ua=\" + (navigator.userAgent || \"\").slice(0, 80);\n"
+                          "  }\n"
+                          "  function _probeStatus(cb) {\n"
+                          "    try {\n"
+                          "      var t = window.location.pathname.split(\"/\").pop() || \"\";\n"
+                          "      fetch(\"/api/stream/\" + t).then(function (r) { cb(r.status); })\n"
+                          "        .catch(function () { cb(\"network\"); });\n"
+                          "    } catch (e) { cb(\"n/a\"); }\n"
+                          "  }\n"
+                          "\n"
+                          "  function getToken() {", "P-0")
+            _js = _r9_rep(_js,
+                          "        if (resp.ok && data.token) {\n"
+                          "          storeToken(data.token);\n"
+                          "          document.body.removeChild(overlay);\n"
+                          "          // Reload with the token\n"
+                          "          var sp = urlParams();\n"
+                          "          sp.set(\"auth\", data.token);\n"
+                          "          window.location.search = sp.toString();\n"
+                          "        } else {",
+                          "        if (resp.ok && data.token) {\n"
+                          "          storeToken(data.token);\n"
+                          "          var _n = _loopInc();\n"
+                          "          if (_n >= 3) {\n"
+                          "            // r8 loop-breaker: accepted 3x but still blocked -> diagnostics\n"
+                          "            document.body.removeChild(overlay);\n"
+                          "            _probeStatus(function (st) {\n"
+                          "              alert(\"Password accepted but the stream is still blocked.\\n\\n\" +\n"
+                          "                \"This is usually a server restart in progress, or an expired/changed link.\\n\" +\n"
+                          "                \"Diagnostics: \" + _diagText() + \" probe=\" + st + \"\\n\\n\" +\n"
+                          "                \"Tap OK to retry from a clean state.\");\n"
+                          "              _loopReset();\n"
+                          "              try { localStorage.removeItem(\"wzml_stream_auth\"); } catch (e) {}\n"
+                          "              window.location.href = window.location.pathname;\n"
+                          "            });\n"
+                          "            return;\n"
+                          "          }\n"
+                          "          document.body.removeChild(overlay);\n"
+                          "          // Reload with the token\n"
+                          "          var sp = urlParams();\n"
+                          "          sp.set(\"auth\", data.token);\n"
+                          "          window.location.search = sp.toString();\n"
+                          "        } else {", "P-1")
+            _js = _r9_rep(_js,
+                          "      return origFetch.call(this, url, opts).then(function (resp) {\n"
+                          "        // Intercept 401 responses for stream endpoints\n"
+                          "        if (\n"
+                          "          resp.status === 401 &&",
+                          "      return origFetch.call(this, url, opts).then(function (resp) {\n"
+                          "        // r8: a successful stream request clears the auth-loop counter\n"
+                          "        if (resp.status === 200 && urlStr.indexOf(\"/api/stream/\") >= 0) {\n"
+                          "          _loopReset();\n"
+                          "        }\n"
+                          "        // Intercept 401 responses for stream endpoints\n"
+                          "        if (\n"
+                          "          resp.status === 401 &&", "P-2")
+            with open(_o_sui, "w", encoding="utf-8") as _f:
+                _f.write(_js)
+            _r = subprocess.run(
+                ["node", "--check", _o_sui],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r.returncode == 0:
+                log("  r9: stall_ui patched (loop-breaker, diagnostics)")
+            else:
+                log(f"  r9: stall_ui FAILED check — {(_r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r9: stall_ui patch FAILED — {e}", "ERROR")
+
+    try:
+        # ---- O-C: stream_server.py (auth logging + log-group alerts) ----
+        _o_ss = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+        with open(_o_ss, "r", encoding="utf-8") as _f:
+            _py = _f.read()
+        if "_r8_group" in _py:
+            log("  r9: stream_server already patched")
+        else:
+            _py = _r9_rep(_py, "async def _ks_auth_api(request):",
+                          "def _r8_group(title, text):\n"
+                          "    \"\"\"r8: fire-and-forget alert to the admin log group.\"\"\"\n"
+                          "    try:\n"
+                          "        from asyncio import get_event_loop as _gel\n"
+                          "\n"
+                          "        async def _send():\n"
+                          "            try:\n"
+                          "                from bot.helper.wzfix.r1_core import admin_log\n"
+                          "\n"
+                          "                await admin_log(title, text)\n"
+                          "            except Exception:\n"
+                          "                pass\n"
+                          "\n"
+                          "        _gel().create_task(_send())\n"
+                          "    except Exception:\n"
+                          "        pass\n"
+                          "\n"
+                          "\n"
+                          "async def _ks_auth_api(request):", "P-3a")
+            _py = _r9_rep(_py,
+                          "    _tok5 = str(body.get(\"token\", \"\") or \"\")\n"
+                          "    if _tok5:\n"
+                          "        try:\n"
+                          "            _lp5 = await _r5_get_link_pass(_tok5)\n"
+                          "        except Exception:\n"
+                          "            _lp5 = None\n"
+                          "        if _lp5 is not None:\n"
+                          "            _sub5 = str(body.get(\"password\", \"\") or \"\")\n"
+                          "            if not _sub5 or not _ks_hmac.compare_digest(_sub5, _lp5):\n"
+                          "                return web.json_response(\n"
+                          "                    {\"error\": \"wrong password\"}, status=401)\n"
+                          "            return web.json_response(\n"
+                          "                {\"token\": _us_sign(_lp5), \"expires\": 86400,\n"
+                          "                 \"link\": _tok5})",
+                          "    _tok5 = str(body.get(\"token\", \"\") or \"\")\n"
+                          "    _ip8 = request.remote or \"?\"\n"
+                          "    if _tok5:\n"
+                          "        try:\n"
+                          "            _lp5 = await _r5_get_link_pass(_tok5)\n"
+                          "        except Exception:\n"
+                          "            _lp5 = None\n"
+                          "        if _lp5 is not None:\n"
+                          "            _sub5 = str(body.get(\"password\", \"\") or \"\")\n"
+                          "            if not _sub5 or not _ks_hmac.compare_digest(_sub5, _lp5):\n"
+                          "                LOGGER.info(\n"
+                          "                    f\"WZFIX stream auth FAIL: token={_tok5[:10]} ip={_ip8}\")\n"
+                          "                _r8_group(\n"
+                          "                    \"\\u274c Stream password\",\n"
+                          "                    f\"Wrong password for link <code>{_tok5[:12]}</code> \"\n"
+                          "                    f\"from <code>{_ip8}</code>\",\n"
+                          "                )\n"
+                          "                return web.json_response(\n"
+                          "                    {\"error\": \"wrong password\"}, status=401)\n"
+                          "            LOGGER.info(\n"
+                          "                f\"WZFIX stream auth OK: token={_tok5[:10]} ip={_ip8}\")\n"
+                          "            return web.json_response(\n"
+                          "                {\"token\": _us_sign(_lp5), \"expires\": 86400,\n"
+                          "                 \"link\": _tok5})", "P-3b")
+            _py = _r9_rep(_py,
+                          "    password = _us_get_pass()\n"
+                          "    if not password:\n"
+                          "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+                          "    submitted = body.get(\"password\", \"\")\n"
+                          "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+                          "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+                          "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})",
+                          "    password = _us_get_pass()\n"
+                          "    if not password:\n"
+                          "        LOGGER.info(f\"WZFIX stream auth: no pass set ip={_ip8}\")\n"
+                          "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+                          "    submitted = body.get(\"password\", \"\")\n"
+                          "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+                          "        LOGGER.info(\n"
+                          "            f\"WZFIX stream auth FAIL (global): ip={_ip8} tok={_tok5[:10]}\")\n"
+                          "        _r8_group(\n"
+                          "            \"\\u274c Stream password\",\n"
+                          "            f\"Wrong global password from <code>{_ip8}</code>\",\n"
+                          "        )\n"
+                          "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+                          "    LOGGER.info(f\"WZFIX stream auth OK (global): ip={_ip8} tok={_tok5[:10]}\")\n"
+                          "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})", "P-3c")
+            with open(_o_ss, "w", encoding="utf-8") as _f:
+                _f.write(_py)
+            _r = subprocess.run(
+                [sys.executable, "-m", "py_compile", _o_ss],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r.returncode == 0:
+                log("  r9: stream_server patched (auth logging + group alerts)")
+            else:
+                log(f"  r9: stream_server FAILED compile — {(_r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r9: stream_server patch FAILED — {e}", "ERROR")
+
+    try:
+        # ---- O-D: r5_streampass.py (gate denial logging) ----
+        _o_r5 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r5_streampass.py")
+        with open(_o_r5, "r", encoding="utf-8") as _f:
+            _r5s = _f.read()
+        if "WZFIX stream gate DENIED" in _r5s:
+            log("  r9: r5 gate already patched")
+        else:
+            _r5s = _r9_rep(_r5s,
+                           "async def serve_ok(request):\n"
+                           "    \"\"\"Per-link gate for the stream server. True = allow.\"\"\"\n"
+                           "    try:\n"
+                           "        tok = path_token(request)\n"
+                           "        if not tok:\n"
+                           "            return True\n"
+                           "        lp = await get_link_pass(tok)\n"
+                           "        if lp is None:\n"
+                           "            return True\n"
+                           "        return verify_link_token(request.query.get(\"auth\"), lp)\n"
+                           "    except Exception:\n"
+                           "        return True",
+                           "async def serve_ok(request):\n"
+                           "    \"\"\"Per-link gate for the stream server. True = allow.\"\"\"\n"
+                           "    import logging as _r8log\n"
+                           "\n"
+                           "    try:\n"
+                           "        tok = path_token(request)\n"
+                           "        if not tok:\n"
+                           "            return True\n"
+                           "        lp = await get_link_pass(tok)\n"
+                           "        if lp is None:\n"
+                           "            return True\n"
+                           "        ok = verify_link_token(request.query.get(\"auth\"), lp)\n"
+                           "        if not ok:\n"
+                           "            _r8log.getLogger(__name__).info(\n"
+                           "                \"WZFIX stream gate DENIED: token=%s ip=%s auth=%s\",\n"
+                           "                str(tok)[:10],\n"
+                           "                getattr(request, \"remote\", \"?\"),\n"
+                           "                \"present\" if request.query.get(\"auth\") else \"missing\",\n"
+                           "            )\n"
+                           "        return ok\n"
+                           "    except Exception:\n"
+                           "        return True", "P-3d")
+            with open(_o_r5, "w", encoding="utf-8") as _f:
+                _f.write(_r5s)
+            _r = subprocess.run(
+                [sys.executable, "-m", "py_compile", _o_r5],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r.returncode == 0:
+                log("  r9: r5 gate patched (denial logging)")
+            else:
+                log(f"  r9: r5 gate FAILED compile — {(_r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r9: r5 gate patch FAILED — {e}", "ERROR")
+
+    try:
+        # ---- O-E: wserver.py (page-serve logging) ----
+        _o_ws = os.path.join(WZMLX_DIR, "web/wserver.py")
+        with open(_o_ws, "r", encoding="utf-8") as _f:
+            _ws = _f.read()
+        if "WZFIX xstrm page" in _ws:
+            log("  r9: wserver already patched")
+        else:
+            _ws = _r9_rep(_ws,
+                          'async def xstrm_page(token: str, request: Request):\n'
+                          '    if not _SAFE_TOKEN.match(token or ""):\n'
+                          '        raise HTTPException(status_code=404, detail="Unknown link")',
+                          'async def xstrm_page(token: str, request: Request):\n'
+                          '    if not _SAFE_TOKEN.match(token or ""):\n'
+                          '        raise HTTPException(status_code=404, detail="Unknown link")\n'
+                          '    # r8: log every stream page serve\n'
+                          '    LOGGER.info(\n'
+                          '        f"WZFIX xstrm page: token={str(token)[:10]} ip={request.client.host if request.client else \'?\'}"\n'
+                          '    )', "P-3e")
+            with open(_o_ws, "w", encoding="utf-8") as _f:
+                _f.write(_ws)
+            _r = subprocess.run(
+                [sys.executable, "-m", "py_compile", _o_ws],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r.returncode == 0:
+                log("  r9: wserver patched (page-serve logging)")
+            else:
+                log(f"  r9: wserver FAILED compile — {(_r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r9: wserver patch FAILED — {e}", "ERROR")
+
+
     # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
     # library, owner cap commands, and DB stats/cleanup.
     # Two new self-contained modules are written into the tree; three small
@@ -4326,12 +4712,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.65"\n'
+                'WZFIX_BUILD = "v15.66"\n'
                 'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.65 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.65 running")
+        log("  r1: versions.py written (v15.66 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.66 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -6300,7 +6686,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.65) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.66) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -6315,7 +6701,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.65): the hyper"
+                "            # WZFIX music keep-chat (v15.66): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
