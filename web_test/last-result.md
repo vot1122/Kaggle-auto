@@ -3,8 +3,8 @@
 - ✅ **login with admin pass** — 200 cookie=yes
 - ✅ **state (all sections)** — 200 keys=['ok', 'day', 'bot', 'users', 'tasks', 'global_cap_gb', 'global_music', 'music_settings', 'totals']
 - ✅ **state has users** — 3 user(s)
-- ✅ **state totals** — {'used': 328906940, 'reserved': 0, 'users': 3, 'tasks': 0}
-- ✅ **user history** — 200 items=24
+- ✅ **state totals** — {'used': 343932054, 'reserved': 0, 'users': 3, 'tasks': 0}
+- ✅ **user history** — 200 items=25
 - ✅ **action botcap (no-op)** — default cap → 15 GB
 - ✅ **action gmusic (no-op)** — default music limit → 10 songs
 - ✅ **action mset music_on (no-op)** — music_on → on
@@ -13,7 +13,15 @@
 - ✅ **action setmusic (test user, no-op)** — music limit for 6726918562 → default
 - ✅ **action report** — report sent
 - ✅ **unknown action rejected** — unknown action: notarealaction
+- ✅ **streampass: dashboard spset** — webtesttoken123 now needs its own password
+- ✅ **streampass: correct password mints link token** — 200 link=webtesttoken123 tok=yes
+- ✅ **streampass: wrong password rejected** — 401
+- ❌ **streampass: gated link meta blocked without auth** — 404 hdr-probe
+- ❌ **streampass: gated link data blocked without auth** — 404 (data path)
+- ✅ **streampass: dashboard splist shows the link** — webtesttoken123 → testpw42
+- ✅ **streampass: dashboard spdel** — removed — back to the global password
+- ✅ **streampass: after del, link falls back to global** — 401 'error': 'wrong password'} (info)
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**15/15 passed**
+**21/23 passed**
