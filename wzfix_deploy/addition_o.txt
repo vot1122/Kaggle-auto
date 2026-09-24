@@ -79,7 +79,7 @@
                 _src = _r9_rep(
                     _src,
                     "act({action:'" + _actn + "',uid:'+u.uid+',v:'",
-                    "act({action:\\\\'" + _actn + "\\\\\\',uid:'+u.uid+',v:'",
+                    "act({action:\\\\'" + _actn + "\\\\',uid:'+u.uid+',v:'",
                     "O-5-" + _actn,
                 )
             with open(_o_r2, "w", encoding="utf-8") as _f:
