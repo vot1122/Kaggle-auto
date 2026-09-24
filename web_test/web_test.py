@@ -43,7 +43,7 @@ def req(method, path, body=None, cookie=None, ua=BROWSER_UA):
         parsed = json.loads(raw.decode("utf-8", "replace"))
     except Exception:
         parsed = None
-    return resp.status, raw[:400], parsed, setc
+    return resp.status, raw[:20000], parsed, setc
 
 def check(label, ok, detail=""):
     RESULTS.append((label, ok, detail))
@@ -166,6 +166,32 @@ def main():
                           {"password": "testpw42", "token": "webtesttoken123"})
     check("streampass: after del, link falls back to global", True,
           f"{code} {str((a or {}) or raw[:60])[1:100]} (info)")
+
+    # 9c. real-link loop check (v15.65): the browser flow that used to
+    # loop forever — gated meta without auth must 401, and must return
+    # 200 with the minted link token; the served page must carry the
+    # loop fixes (auth forwarding + location.search URLs).
+    tok = ""
+    code, raw, a, _ = req("POST", "/api/stream_auth",
+                          {"password": "testpw1", "token": "vaRKGIQ"})
+    if code == 200:
+        tok = (a or {}).get("token") or ""
+    code, raw, a, _ = req("GET", "/api/stream/vaRKGIQ")
+    if code == 404:
+        check("loop-fix: real gated link probe (info)", True,
+              f"{code} — link or its password no longer present")
+    else:
+        check("loop-fix: real gated link 401 without auth", code == 401,
+              f"{code}")
+        code, raw, a, _ = req("GET", "/api/stream/vaRKGIQ?auth=" + tok)
+        check("loop-fix: real gated link 200 with minted token",
+              code == 200, f"{code} tok={'yes' if tok else 'NO'}")
+    code, raw, a, _ = req("GET", "/xstrm/vaRKGIQ")
+    check("loop-fix: stream page serves the v15.65 fixes",
+          code == 200 and "location.search" in raw
+          and "getToken() || params.get" in raw,
+          f"{code} jsfix={'yes' if 'getToken() || params.get' in raw else 'no'}"
+          f" urlfix={'yes' if 'location.search' in raw else 'no'}")
 
     # 10. logout
     code, raw, a, _ = req("POST", "/wzadmin/api/logout", cookie=ck)
