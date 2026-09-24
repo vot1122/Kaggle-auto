@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.61  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.62  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2024,6 +2024,99 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
+# WZFIX Round 5 (v15.62) — per-link stream passwords.
+WZFIX_R5_STREAMPASS_B64 = (
+    "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
+    "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
+    "aW5nbGUgZ2xvYmFsIFNUUkVBTV9QQVNTIGZvciB0aGF0IG9uZSBsaW5rLgpQYXNzd29yZHMgbGl2ZSBpbiBNb25nb0RCICh3emZp"
+    "eF9zdHJlYW1wYXNzKSBzbyB0aGV5IHN1cnZpdmUgcmVzdGFydHMKYW5kIGFyZSBzaGFyZWQgbGl2ZSBiZXR3ZWVuIHRoZSBUZWxl"
+    "Z3JhbSBjb21tYW5kIGFuZCB0aGUgc3RyZWFtCnNlcnZlciAoc2FtZSBwcm9jZXNzKS4KCkJlaGF2aW9yOgotIGxpbmsgV0lUSCBh"
+    "IGN1c3RvbSBwYXNzd29yZCDihpIgdGhhdCBwYXNzd29yZCB1bmxvY2tzIGl0OyB0aGUgZ2xvYmFsCiAgU1RSRUFNX1BBU1MgZG9l"
+    "cyBOT1QuIENoZWNrZWQgb24gZXZlcnkgcGFnZS9tZXRhL2RhdGEgcmVxdWVzdC4KLSBsaW5rIFdJVEhPVVQg4oaSIGNvbXBsZXRl"
+    "bHkgdW5jaGFuZ2VkIGxlZ2FjeSBiZWhhdmlvci4KCk93bmVyL3N1ZG8gY29tbWFuZDoKICAvc3RyZWFtcGFzcyBzZXQgPHVybC1v"
+    "ci10b2tlbj4gPHBhc3N3b3JkPgogIC9zdHJlYW1wYXNzIGRlbCA8dXJsLW9yLXRva2VuPgogIC9zdHJlYW1wYXNzIGxpc3QKCkZh"
+    "aWwtb3BlbjogaWYgTW9uZ29EQiBpcyB1bnJlYWNoYWJsZSB0aGUgZ2F0ZSBsZXRzIHJlcXVlc3RzIHRocm91Z2gg4oCUCmEgc3Rv"
+    "cmFnZSBvdXRhZ2UgbXVzdCBuZXZlciB0YWtlIHN0cmVhbXMgZG93bi4KIiIiCgppbXBvcnQgcmUKaW1wb3J0IHRpbWUKCmZyb20g"
+    "Ym90IGltcG9ydCBMT0dHRVIKCl9sb2cgPSBMT0dHRVIuaW5mbyBpZiBMT0dHRVIgZWxzZSBwcmludAoKX1RPS0VOX1JFID0gcmUu"
+    "Y29tcGlsZShyIl5bQS1aYS16MC05Xy1dezQsMTI4fSQiKQpfTUFYX1BBU1MgPSA2NAoKCmRlZiBfZGIoKToKICAgIGZyb20gLi5l"
+    "eHRfdXRpbHMuZGJfaGFuZGxlciBpbXBvcnQgZGF0YWJhc2UKCiAgICByZXR1cm4gZGF0YWJhc2UuZGIKCgpkZWYgX3BhcnQoKToK"
+    "ICAgIGZyb20gLi4uY29yZS50Z19jbGllbnQgaW1wb3J0IGRiX3BhcnRpdGlvbl9pZAogICAgZnJvbSAuLi5jb3JlLmNvbmZpZ19t"
+    "YW5hZ2VyIGltcG9ydCBDb25maWcKCiAgICByZXR1cm4gZGJfcGFydGl0aW9uX2lkKENvbmZpZy5CT1RfVE9LRU4uc3BsaXQoIjoi"
+    "LCAxKVswXSkKCgpkZWYgZXh0cmFjdF90b2tlbih0ZXh0KToKICAgICIiIlRva2VuIGZyb20gYSBwYXN0ZWQgVVJMICgvc3RyZWFt"
+    "L1RPS0VOLCAvZGwvVE9LRU4/eCkgb3IgYSBiYXJlIHRva2VuLiIiIgogICAgdCA9ICh0ZXh0IG9yICIiKS5zdHJpcCgpCiAgICBp"
+    "ZiBub3QgdDoKICAgICAgICByZXR1cm4gIiIKICAgIHQgPSB0LnNwbGl0KCI/IiwgMSlbMF0uc3BsaXQoIiMiLCAxKVswXQogICAg"
+    "aWYgIi8iIGluIHQ6CiAgICAgICAgdCA9IHQucnN0cmlwKCIvIikuc3BsaXQoIi8iKVstMV0KICAgIHJldHVybiB0IGlmIF9UT0tF"
+    "Tl9SRS5tYXRjaCh0KSBlbHNlICIiCgoKZGVmIHBhdGhfdG9rZW4ocmVxdWVzdCk6CiAgICAiIiJTdHJlYW0gdG9rZW4gZnJvbSBh"
+    "biBhaW9odHRwIHJlcXVlc3QgcGF0aCAoL19zdHJlYW0vVE9LRU4gZXRjLikuIiIiCiAgICB0cnk6CiAgICAgICAgc2VnID0gW3Ag"
+    "Zm9yIHAgaW4gcmVxdWVzdC5wYXRoLnNwbGl0KCIvIikgaWYgcF0KICAgICAgICB0b2sgPSBzZWdbLTFdIGlmIHNlZyBlbHNlICIi"
+    "CiAgICAgICAgcmV0dXJuIHRvayBpZiBfVE9LRU5fUkUubWF0Y2godG9rKSBlbHNlICIiCiAgICBleGNlcHQgRXhjZXB0aW9uOgog"
+    "ICAgICAgIHJldHVybiAiIgoKCmFzeW5jIGRlZiBnZXRfbGlua19wYXNzKHRva2VuKToKICAgICIiIkN1c3RvbSBwYXNzd29yZCBm"
+    "b3IgdGhpcyBsaW5rLCBvciBOb25lIHdoZW4gaXQgaGFzIG5vbmUuIiIiCiAgICB0cnk6CiAgICAgICAgZG9jID0gYXdhaXQgX2Ri"
+    "KCkud3pmaXhfc3RyZWFtcGFzc1tfcGFydCgpXS5maW5kX29uZSh7Il9pZCI6IHRva2VufSkKICAgICAgICBwID0gKGRvYyBvciB7"
+    "fSkuZ2V0KCJwYXNzIikgb3IgIiIKICAgICAgICByZXR1cm4gcCBvciBOb25lCiAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAg"
+    "ICAgICAgX2xvZyhmIldaRklYIHI1OiBnZXRfbGlua19wYXNzIGZhaWxlZDoge2V9IikKICAgICAgICByZXR1cm4gTm9uZQoKCmFz"
+    "eW5jIGRlZiBzZXRfbGlua19wYXNzKHRva2VuLCBwYXNzd29yZCwgYnkpOgogICAgYXdhaXQgX2RiKCkud3pmaXhfc3RyZWFtcGFz"
+    "c1tfcGFydCgpXS51cGRhdGVfb25lKAogICAgICAgIHsiX2lkIjogdG9rZW59LAogICAgICAgIHsiJHNldCI6IHsicGFzcyI6IHBh"
+    "c3N3b3JkLCAiYnkiOiBieSwgImF0IjogdGltZS50aW1lKCl9fSwKICAgICAgICB1cHNlcnQ9VHJ1ZSwKICAgICkKCgphc3luYyBk"
+    "ZWYgZGVsX2xpbmtfcGFzcyh0b2tlbik6CiAgICB0cnk6CiAgICAgICAgciA9IGF3YWl0IF9kYigpLnd6Zml4X3N0cmVhbXBhc3Nb"
+    "X3BhcnQoKV0uZGVsZXRlX29uZSh7Il9pZCI6IHRva2VufSkKICAgICAgICByZXR1cm4gci5kZWxldGVkX2NvdW50ID4gMAogICAg"
+    "ZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICByZXR1cm4gRmFsc2UKCgphc3luYyBkZWYgYWxsX2xpbmtfcGFzc2VzKCk6CiAgICBj"
+    "dXIgPSAoCiAgICAgICAgX2RiKCkud3pmaXhfc3RyZWFtcGFzc1tfcGFydCgpXQogICAgICAgIC5maW5kKHt9LCB7Il9pZCI6IDEs"
+    "ICJwYXNzIjogMSwgImF0IjogMX0pCiAgICAgICAgLnNvcnQoImF0IiwgLTEpCiAgICAgICAgLmxpbWl0KDUwKQogICAgKQogICAg"
+    "cmV0dXJuIFtkIGFzeW5jIGZvciBkIGluIGN1cl0KCgpkZWYgdmVyaWZ5X2xpbmtfdG9rZW4odG9rZW5fdmFsdWUsIHBhc3N3b3Jk"
+    "KToKICAgICIiIkhNQUMgY2hlY2sgb2YgYSBzdWJtaXR0ZWQgYXV0aCB0b2tlbiBhZ2FpbnN0IGEgbGluayBwYXNzd29yZC4iIiIK"
+    "ICAgIHRyeToKICAgICAgICBmcm9tIC4udXNlcl9zdHJlYW1fbW9kdWxlIGltcG9ydCBfdmVyaWZ5X3Rva2VuCgogICAgICAgIHJl"
+    "dHVybiBfdmVyaWZ5X3Rva2VuKHRva2VuX3ZhbHVlIG9yICIiLCBwYXNzd29yZCkKICAgIGV4Y2VwdCBFeGNlcHRpb246CiAgICAg"
+    "ICAgcmV0dXJuIEZhbHNlCgoKYXN5bmMgZGVmIHNlcnZlX29rKHJlcXVlc3QpOgogICAgIiIiUGVyLWxpbmsgZ2F0ZSBmb3IgdGhl"
+    "IHN0cmVhbSBzZXJ2ZXIuIFRydWUgPSBhbGxvdy4iIiIKICAgIHRyeToKICAgICAgICB0b2sgPSBwYXRoX3Rva2VuKHJlcXVlc3Qp"
+    "CiAgICAgICAgaWYgbm90IHRvazoKICAgICAgICAgICAgcmV0dXJuIFRydWUKICAgICAgICBscCA9IGF3YWl0IGdldF9saW5rX3Bh"
+    "c3ModG9rKQogICAgICAgIGlmIGxwIGlzIE5vbmU6CiAgICAgICAgICAgIHJldHVybiBUcnVlCiAgICAgICAgcmV0dXJuIHZlcmlm"
+    "eV9saW5rX3Rva2VuKHJlcXVlc3QucXVlcnkuZ2V0KCJhdXRoIiksIGxwKQogICAgZXhjZXB0IEV4Y2VwdGlvbjoKICAgICAgICBy"
+    "ZXR1cm4gVHJ1ZQoKCiMg4pSA4pSA4pSAIG93bmVyIGNvbW1hbmQg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA"
+    "4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA"
+    "4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACgpfSEVMUCA9ICgKICAgICI8Yj5TdHJlYW0tbGluayBwYXNzd29y"
+    "ZHM8L2I+XG5cbiIKICAgICIvc3RyZWFtcGFzcyBzZXQgPGNvZGU+PGxpbms+PC9jb2RlPiA8Y29kZT48cGFzc3dvcmQ+PC9jb2Rl"
+    "PiIKICAgICIg4oCUIHByb3RlY3Qgb25lIHN0cmVhbSBsaW5rXG4iCiAgICAiL3N0cmVhbXBhc3MgZGVsIDxjb2RlPjxsaW5rPjwv"
+    "Y29kZT4g4oCUIHJlbW92ZSBpdCIKICAgICIgKGZhbGxzIGJhY2sgdG8gdGhlIGdsb2JhbCBwYXNzd29yZClcbiIKICAgICIvc3Ry"
+    "ZWFtcGFzcyBsaXN0IOKAlCBsaW5rcyB3aXRoIHRoZWlyIG93biBwYXNzd29yZFxuXG4iCiAgICAiUGFzdGUgdGhlIGZ1bGwgc3Ry"
+    "ZWFtIGxpbmsgb3IganVzdCBpdHMgdG9rZW4uIEEgbGluayB3aXRoIGl0cyBvd24gIgogICAgInBhc3N3b3JkIG5vIGxvbmdlciBh"
+    "Y2NlcHRzIHRoZSBnbG9iYWwgb25lLiIKKQoKCmFzeW5jIGRlZiB3emZpeF9zdHJlYW1wYXNzKGNsaWVudCwgbWVzc2FnZSk6CiAg"
+    "ICBhcmdzID0gKG1lc3NhZ2UudGV4dCBvciAiIikuc3BsaXQoKQogICAgc3ViID0gKGFyZ3NbMV0ubG93ZXIoKSBpZiBsZW4oYXJn"
+    "cykgPiAxIGVsc2UgImhlbHAiKQoKICAgIGlmIHN1YiBpbiAoImhlbHAiLCAic3RhcnQiKToKICAgICAgICByZXR1cm4gYXdhaXQg"
+    "bWVzc2FnZS5yZXBseV90ZXh0KF9IRUxQKQoKICAgIGlmIHN1YiA9PSAibGlzdCI6CiAgICAgICAgdHJ5OgogICAgICAgICAgICBy"
+    "b3dzID0gYXdhaXQgYWxsX2xpbmtfcGFzc2VzKCkKICAgICAgICBleGNlcHQgRXhjZXB0aW9uIGFzIGU6CiAgICAgICAgICAgIHJl"
+    "dHVybiBhd2FpdCBtZXNzYWdlLnJlcGx5X3RleHQoZiLinYwgREIgZXJyb3I6IHtlfSIpCiAgICAgICAgaWYgbm90IHJvd3M6CiAg"
+    "ICAgICAgICAgIHJldHVybiBhd2FpdCBtZXNzYWdlLnJlcGx5X3RleHQoCiAgICAgICAgICAgICAgICAiTm8gbGlua3MgaGF2ZSBh"
+    "IGN1c3RvbSBwYXNzd29yZCDigJQgIgogICAgICAgICAgICAgICAgImV2ZXJ5dGhpbmcgdXNlcyB0aGUgZ2xvYmFsIFNUUkVBTV9Q"
+    "QVNTLiIKICAgICAgICAgICAgKQogICAgICAgIG91dCA9IFsiPGI+Q3VzdG9tIHN0cmVhbSBwYXNzd29yZHM8L2I+XG4iXQogICAg"
+    "ICAgIGZvciBkIGluIHJvd3M6CiAgICAgICAgICAgIG91dC5hcHBlbmQoCiAgICAgICAgICAgICAgICBmIuKAoiA8Y29kZT57ZFsn"
+    "X2lkJ119PC9jb2RlPiDihpIgPGNvZGU+e2RbJ3Bhc3MnXX08L2NvZGU+IgogICAgICAgICAgICApCiAgICAgICAgb3V0LmFwcGVu"
+    "ZChmIlxue2xlbihyb3dzKX0gbGluayhzKSIpCiAgICAgICAgcmV0dXJuIGF3YWl0IG1lc3NhZ2UucmVwbHlfdGV4dCgiXG4iLmpv"
+    "aW4ob3V0KSkKCiAgICBpZiBzdWIgPT0gInNldCI6CiAgICAgICAgaWYgbGVuKGFyZ3MpIDwgNDoKICAgICAgICAgICAgcmV0dXJu"
+    "IGF3YWl0IG1lc3NhZ2UucmVwbHlfdGV4dCgKICAgICAgICAgICAgICAgICJVc2FnZTogL3N0cmVhbXBhc3Mgc2V0IDxsaW5rPiA8"
+    "cGFzc3dvcmQ+IgogICAgICAgICAgICApCiAgICAgICAgdG9rID0gZXh0cmFjdF90b2tlbihhcmdzWzJdKQogICAgICAgIHB3ID0g"
+    "YXJnc1szXQogICAgICAgIGlmIG5vdCB0b2s6CiAgICAgICAgICAgIHJldHVybiBhd2FpdCBtZXNzYWdlLnJlcGx5X3RleHQoCiAg"
+    "ICAgICAgICAgICAgICAi4p2MIFRoYXQgZG9lc24ndCBsb29rIGxpa2UgYSBzdHJlYW0gbGluayBvciB0b2tlbi4iCiAgICAgICAg"
+    "ICAgICkKICAgICAgICBpZiBsZW4ocHcpID4gX01BWF9QQVNTOgogICAgICAgICAgICByZXR1cm4gYXdhaXQgbWVzc2FnZS5yZXBs"
+    "eV90ZXh0KAogICAgICAgICAgICAgICAgZiLinYwgUGFzc3dvcmQgdG9vIGxvbmcgKG1heCB7X01BWF9QQVNTfSBjaGFycywgbm8g"
+    "c3BhY2VzKS4iCiAgICAgICAgICAgICkKICAgICAgICB0cnk6CiAgICAgICAgICAgIGF3YWl0IHNldF9saW5rX3Bhc3ModG9rLCBw"
+    "dywgbWVzc2FnZS5mcm9tX3VzZXIuaWQpCiAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgICAgICAgICByZXR1cm4g"
+    "YXdhaXQgbWVzc2FnZS5yZXBseV90ZXh0KGYi4p2MIERCIGVycm9yOiB7ZX0iKQogICAgICAgIF9sb2coZiJXWkZJWCByNTogc3Ry"
+    "ZWFtIHBhc3Mgc2V0IGZvciB7dG9rfSIpCiAgICAgICAgcmV0dXJuIGF3YWl0IG1lc3NhZ2UucmVwbHlfdGV4dCgKICAgICAgICAg"
+    "ICAgZiLinIUgTG9ja2VkLlxuPGNvZGU+e3Rva308L2NvZGU+IG5vdyBuZWVkcyB0aGUgcGFzc3dvcmQgIgogICAgICAgICAgICBm"
+    "Ijxjb2RlPntwd308L2NvZGU+IOKAlCB0aGUgZ2xvYmFsIHBhc3N3b3JkIG5vIGxvbmdlciBvcGVucyBpdC4gIgogICAgICAgICAg"
+    "ICAiQXBwbGllcyBpbW1lZGlhdGVseTsgZGVsZXRlIHRoZSBtZXNzYWdlIHRvIGhpZGUgdGhlIHBhc3N3b3JkLiIKICAgICAgICAp"
+    "CgogICAgaWYgc3ViIGluICgiZGVsIiwgImRlbGV0ZSIsICJybSIpOgogICAgICAgIGlmIGxlbihhcmdzKSA8IDM6CiAgICAgICAg"
+    "ICAgIHJldHVybiBhd2FpdCBtZXNzYWdlLnJlcGx5X3RleHQoIlVzYWdlOiAvc3RyZWFtcGFzcyBkZWwgPGxpbms+IikKICAgICAg"
+    "ICB0b2sgPSBleHRyYWN0X3Rva2VuKGFyZ3NbMl0pCiAgICAgICAgaWYgbm90IHRvazoKICAgICAgICAgICAgcmV0dXJuIGF3YWl0"
+    "IG1lc3NhZ2UucmVwbHlfdGV4dCgKICAgICAgICAgICAgICAgICLinYwgVGhhdCBkb2Vzbid0IGxvb2sgbGlrZSBhIHN0cmVhbSBs"
+    "aW5rIG9yIHRva2VuLiIKICAgICAgICAgICAgKQogICAgICAgIHJlbW92ZWQgPSBhd2FpdCBkZWxfbGlua19wYXNzKHRvaykKICAg"
+    "ICAgICByZXR1cm4gYXdhaXQgbWVzc2FnZS5yZXBseV90ZXh0KAogICAgICAgICAgICBmIuKchSBSZW1vdmVkIOKAlCA8Y29kZT57"
+    "dG9rfTwvY29kZT4gaXMgYmFjayB0byB0aGUgZ2xvYmFsIHBhc3N3b3JkLiIKICAgICAgICAgICAgaWYgcmVtb3ZlZAogICAgICAg"
+    "ICAgICBlbHNlIGYi4oS577iPIDxjb2RlPnt0b2t9PC9jb2RlPiBoYWQgbm8gY3VzdG9tIHBhc3N3b3JkLiIKICAgICAgICApCgog"
+    "ICAgcmV0dXJuIGF3YWl0IG1lc3NhZ2UucmVwbHlfdGV4dChfSEVMUCkK"
+)
+
 WZFIX_ADMIN_B64 = (
     "IyBXWkZJWCBSb3VuZCAxICh2MTUuNykg4oCUIG93bmVyICYgdXNlciBjb21tYW5kcy4KIwojICAgL2ZpbmQgPHF1ZXJ5PiAgICAg"
     "ICAgc2VhcmNoIHlvdXIgZG93bmxvYWQgbGlicmFyeSAob3duZXI6IC9maW5kIC1hIDxxPiA9IGFsbCB1c2VycykKIyAgIC91c2Fn"
@@ -3775,6 +3868,205 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
+    # Kaggle addition K — v15.62 Round 5: per-link stream passwords.
+    # A stream link (/stream/<token>) can carry its own password in
+    # MongoDB; it then stops accepting the global STREAM_PASS. The
+    # serve/meta gates, the auth API and the password modal all learn
+    # the link token. Fails open on DB errors.
+    ok_j = 0
+    try:
+        wzfix_dir5 = os.path.join(WZMLX_DIR, "bot/helper/wzfix")
+        os.makedirs(wzfix_dir5, exist_ok=True)
+        with open(
+            os.path.join(wzfix_dir5, "r5_streampass.py"), "w", encoding="utf-8"
+        ) as f:
+            f.write(base64.b64decode(WZFIX_R5_STREAMPASS_B64).decode("utf-8"))
+        ok_j += 1
+        log("  r5: wrote r5_streampass.py")
+    except Exception as e:
+        log(f"  r5 write FAILED — {e}", "ERROR")
+
+    # K-2: stream_server.py — r5 import + per-link gates + auth branch
+    ss5_path = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+    try:
+        with open(ss5_path, "r", encoding="utf-8") as f:
+            ss5 = f.read()
+        imp5_old = "from ..core.config_manager import Config\n# USER_STREAM_PATCHED"
+        imp5_new = (
+            "from ..core.config_manager import Config\n"
+            "# USER_STREAM_PATCHED\n"
+            "from ..helper.wzfix.r5_streampass import (  # WZFIX_R5\n"
+            "    path_token as _r5_path_token,\n"
+            "    get_link_pass as _r5_get_link_pass,\n"
+            "    serve_ok as _r5_serve_ok,\n"
+            ")"
+        )
+        if imp5_old in ss5 and "WZFIX_R5" not in ss5:
+            ss5 = ss5.replace(imp5_old, imp5_new, 1)
+            ok_j += 1
+        gate5_old = (
+            "async def _serve(request, kind):\n"
+            "    # KAGGLE_AUTH_GATE: user-account streams (?user=1) require\n"
+            "    # the stream password (only when STREAM_PASS is set).\n"
+            "    # Bot-account streams stay open — password is a\n"
+            "    # user-account feature only.\n"
+            "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+            "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+            "        )\n"
+            "    _, cid, mid = await _resolve(request)\n"
+        )
+        gate5_new = (
+            "async def _serve(request, kind):\n"
+            "    # WZFIX_R5_GATE: per-link stream passwords — a link with\n"
+            "    # its own password requires it on every request; links\n"
+            "    # without one keep the legacy behavior below.\n"
+            "    if not await _r5_serve_ok(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+            "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+            "        )\n"
+            "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+            "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+            "        )\n"
+            "    _, cid, mid = await _resolve(request)\n"
+        )
+        if gate5_old in ss5 and "WZFIX_R5_GATE" not in ss5:
+            ss5 = ss5.replace(gate5_old, gate5_new, 1)
+            ok_j += 1
+        meta5_old = (
+            "    if use_user and not _us_check_auth(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+        )
+        meta5_new = (
+            "    if not await _r5_serve_ok(request) or (  # WZFIX_R5_META\n"
+            "        use_user and not _us_check_auth(request)\n"
+            "    ):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+        )
+        if meta5_old in ss5 and "WZFIX_R5_META" not in ss5:
+            ss5 = ss5.replace(meta5_old, meta5_new, 1)
+            ok_j += 1
+        auth5_old = (
+            "async def _ks_auth_api(request):\n"
+            "    try:\n"
+            "        body = await request.json()\n"
+            "    except Exception:\n"
+            "        body = {}\n"
+            "    import hmac as _ks_hmac\n"
+            "    password = _us_get_pass()\n"
+            "    if not password:\n"
+            "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+            "    submitted = body.get(\"password\", \"\")\n"
+            "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+            "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+            "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})"
+        )
+        auth5_new = (
+            "async def _ks_auth_api(request):\n"
+            "    try:\n"
+            "        body = await request.json()\n"
+            "    except Exception:\n"
+            "        body = {}\n"
+            "    import hmac as _ks_hmac\n"
+            "    # WZFIX_R5_AUTH: a per-link password has priority for its link\n"
+            "    _tok5 = str(body.get(\"token\", \"\") or \"\")\n"
+            "    if _tok5:\n"
+            "        try:\n"
+            "            _lp5 = await _r5_get_link_pass(_tok5)\n"
+            "        except Exception:\n"
+            "            _lp5 = None\n"
+            "        if _lp5 is not None:\n"
+            "            _sub5 = str(body.get(\"password\", \"\") or \"\")\n"
+            "            if not _sub5 or not _ks_hmac.compare_digest(_sub5, _lp5):\n"
+            "                return web.json_response(\n"
+            "                    {\"error\": \"wrong password\"}, status=401)\n"
+            "            return web.json_response(\n"
+            "                {\"token\": _us_sign(_lp5), \"expires\": 86400,\n"
+            "                 \"link\": _tok5})\n"
+            "    password = _us_get_pass()\n"
+            "    if not password:\n"
+            "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+            "    submitted = body.get(\"password\", \"\")\n"
+            "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+            "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+            "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})"
+        )
+        if auth5_old in ss5 and "WZFIX_R5_AUTH" not in ss5:
+            ss5 = ss5.replace(auth5_old, auth5_new, 1)
+            ok_j += 1
+        with open(ss5_path, "w", encoding="utf-8") as f:
+            f.write(ss5)
+        if "WZFIX_R5" in ss5:
+            r5c = subprocess.run(
+                [sys.executable, "-m", "py_compile", ss5_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            if r5c.returncode != 0:
+                log(f"  r5 stream_server compile FAILED: {(r5c.stderr or '')[-400:]}", "ERROR")
+            else:
+                log(f"  r5 stream_server: per-link gates applied ({ok_j} edits, compiles)")
+    except Exception as e:
+        log(f"  r5 stream_server FAILED — {e}", "ERROR")
+
+    # K-3: stall_ui.js — the password modal must send the link token
+    sui5_path = os.path.join(WZMLX_DIR, "web/templates/stall_ui.js")
+    try:
+        with open(sui5_path, "r", encoding="utf-8") as f:
+            sui5 = f.read()
+        sui5_old = "body: JSON.stringify({ password: password }),"
+        sui5_new = (
+            "body: JSON.stringify({\n"
+            "            password: password,\n"
+            "            token: (window.location.pathname.split(\"/\").pop() || \"\"),\n"
+            "          }),"
+        )
+        if sui5_old in sui5 and "token: (window.location.pathname" not in sui5:
+            sui5 = sui5.replace(sui5_old, sui5_new, 1)
+            with open(sui5_path, "w", encoding="utf-8") as f:
+                f.write(sui5)
+            ok_j += 1
+        log("  r5 stall_ui: password POST carries the link token")
+    except Exception as e:
+        log(f"  r5 stall_ui FAILED — {e}", "ERROR")
+
+    # K-4: register /streampass (owner/sudo)
+    hd5_path = os.path.join(WZMLX_DIR, "bot/core/handlers.py")
+    try:
+        with open(hd5_path, "r", encoding="utf-8") as f:
+            hd5 = f.read()
+        if "wzfix_streampass" not in hd5:
+            hd5 += (
+                '\n    # WZFIX r5 streampass (v15.62)\n'
+                '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
+                '    TgClient.bot.add_handler(\n'
+                '        MessageHandler(\n'
+                '            wzfix_streampass,\n'
+                '            filters=command("streampass", case_sensitive=True)\n'
+                '            & CustomFilters.sudo,\n'
+                '        )\n'
+                '    )\n'
+            )
+            with open(hd5_path, "w", encoding="utf-8") as f:
+                f.write(hd5)
+            ok_j += 1
+        r5h = subprocess.run(
+            [sys.executable, "-m", "py_compile", hd5_path],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r5h.returncode != 0:
+            log(f"  r5 handlers compile FAILED: {(r5h.stderr or '')[-400:]}", "ERROR")
+        else:
+            log(f"  r5 handlers: /streampass registered (total {ok_j} edits)")
+    except Exception as e:
+        log(f"  r5 handlers FAILED — {e}", "ERROR")
+
+
     # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
     # library, owner cap commands, and DB stats/cleanup.
     # Two new self-contained modules are written into the tree; three small
@@ -3801,12 +4093,12 @@ def apply_userrepo_patches():
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.61"\n'
+                'WZFIX_BUILD = "v15.62"\n'
                 'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.61 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.61 running")
+        log("  r1: versions.py written (v15.62 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.62 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -5775,7 +6067,7 @@ def apply_userrepo_patches():
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.61) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.62) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -5790,7 +6082,7 @@ def apply_userrepo_patches():
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.61): the hyper"
+                "            # WZFIX music keep-chat (v15.62): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
