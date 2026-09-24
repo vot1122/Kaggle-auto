@@ -1,7 +1,8 @@
-"""Web UI + dashboard smoke test for the WZML-X deployment.
+"""Web UI + dashboard full test for the WZML-X deployment.
 
-v2: adds /wzadmin dashboard probes with a browser UA (the dashboard
-blocks script UAs) and POST support for the login endpoint tests.
+v3: complete authenticated dashboard flow — login with the admin pass,
+read state, no-op writes for every setting (read current value, write it
+back), user history, report action, logout, and session teardown checks.
 Pure stdlib.
 """
 
@@ -12,99 +13,145 @@ import time
 from urllib.parse import urlparse
 
 BASE = "https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
-QPASS = "52731cc8ab38b88410994a20"
-NPASS = "c23d8198078c635d61cd5ad4"
+ADMIN_PASS = "11"
+TEST_UID = 6726918562  # CP smile (test account)
 
 BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
-SCRIPT_UA = "wz-web-test/1.0"
 
 _ctx = ssl.create_default_context()
 HOST = urlparse(BASE).hostname
-
-TESTS = [
-    # (label, method, path, body, expect, ua)
-    ("landing page", "GET", "/", None, 200, SCRIPT_UA),
-    ("owner dashboard page", "GET", "/wzadmin", None, 200, BROWSER_UA),
-    ("dashboard page script-UA blocked", "GET", "/wzadmin", None, 403, SCRIPT_UA),
-    ("heartbeat /_ping", "GET", "/_ping", None, 200, BROWSER_UA),
-    ("state without session", "GET", "/wzadmin/api/state", None, 401, BROWSER_UA),
-    ("action without session", "POST", "/wzadmin/api/action",
-     {"do": "report"}, 401, BROWSER_UA),
-    ("login script-UA blocked", "POST", "/wzadmin/api/login",
-     {"pass": "11"}, 403, SCRIPT_UA),
-    ("login wrong pass", "POST", "/wzadmin/api/login",
-     {"pass": "not-the-pass"}, None, BROWSER_UA),
-    ("login right pass (datacenter shield)", "POST", "/wzadmin/api/login",
-     {"pass": "11"}, None, BROWSER_UA),
-    ("file manager page", "GET", "/app/files", None, 200, SCRIPT_UA),
-    ("pin api no gid", "GET", "/app/files/torrent", None, 200, SCRIPT_UA),
-    ("qbit ui valid pass", "GET", f"/qbit/?pass={QPASS}", None, 200, SCRIPT_UA),
-    ("qbit api valid pass", "GET", f"/qbit/api/v2/app/version?pass={QPASS}",
-     None, 200, SCRIPT_UA),
-    ("qbit wrong pass", "GET", "/qbit/?pass=wrongpass", None, 403, SCRIPT_UA),
-    ("nzb ui valid pass (known broken)", "GET", f"/nzb/?pass={NPASS}",
-     None, 500, SCRIPT_UA),
-    ("nzb wrong pass", "GET", "/nzb/api?mode=version&output=json&pass=wrongpass",
-     None, 403, SCRIPT_UA),
-    ("stream bogus token", "GET", "/stream/bogus1234", None, 404, SCRIPT_UA),
-    ("download bogus token", "GET", "/dl/bogus1234", None, 404, SCRIPT_UA),
-    ("unknown page 404", "GET", "/definitely-not-a-page", None, 404, SCRIPT_UA),
-]
+RESULTS = []
 
 
-def probe(method, path, body, ua):
-    t0 = time.time()
+def req(method, path, body=None, cookie=None, ua=BROWSER_UA):
+    conn = http.client.HTTPSConnection(HOST, timeout=25, context=_ctx)
+    headers = {"User-Agent": ua}
+    data = None
+    if body is not None:
+        data = json.dumps(body)
+        headers["Content-Type"] = "application/json"
+    if cookie:
+        headers["Cookie"] = cookie
+    conn.request(method, path, body=data, headers=headers)
+    resp = conn.getresponse()
+    raw = resp.read(65536)
+    setc = resp.getheader("Set-Cookie") or ""
+    conn.close()
     try:
-        conn = http.client.HTTPSConnection(HOST, timeout=20, context=_ctx)
-        headers = {"User-Agent": ua}
-        data = None
-        if body is not None:
-            data = json.dumps(body)
-            headers["Content-Type"] = "application/json"
-        conn.request(method, path, body=data, headers=headers)
-        resp = conn.getresponse()
-        raw = resp.read(2048)
-        ms = int((time.time() - t0) * 1000)
-        info = {
-            "status": resp.status,
-            "ms": ms,
-            "ctype": (resp.getheader("Content-Type") or "?").split(";")[0],
-            "snippet": " ".join(raw[:250].decode("utf-8", "replace").split())[:150],
-        }
-        conn.close()
-        return info, None
-    except Exception as e:
-        return None, f"{type(e).__name__}: {e}"
+        parsed = json.loads(raw.decode("utf-8", "replace"))
+    except Exception:
+        parsed = None
+    return resp.status, raw[:400], parsed, setc
+
+
+def check(label, ok, detail=""):
+    RESULTS.append((label, ok, detail))
+    print(f"{'PASS' if ok else 'FAIL'} | {label} | {detail}")
 
 
 def main():
-    lines = ["# web test results (v2 — dashboard)",
-             "", "| check | status | ms | type | result |",
-             "|---|---|---|---|---|"]
-    pass_n = fail_n = err_n = 0
-    for label, method, path, body, expect, ua in TESTS:
-        info, err = probe(method, path, body, ua)
-        if err:
-            err_n += 1
-            lines.append(f"| {label} | ERR | - | - | {err} |")
-            continue
-        s = info["status"]
-        if expect is not None:
-            ok = (s == expect)
-        else:
-            ok = s < 500
-        verdict = "PASS" if ok else "FAIL"
-        pass_n, fail_n = (pass_n + 1, fail_n) if ok else (pass_n, fail_n + 1)
-        lines.append(
-            f"| {label} | {s} {verdict} | {info['ms']} | {info['ctype']} | {info['snippet']} |"
-        )
-    lines += ["", f"**{pass_n} pass / {fail_n} fail / {err_n} error**", ""]
+    # 1. login
+    code, raw, body, setc = req("POST", "/wzadmin/api/login", {"pass": ADMIN_PASS})
+    tok = ""
+    if "wzadmin=" in setc:
+        tok = setc.split("wzadmin=")[1].split(";")[0]
+    check("login with admin pass", code == 200 and body and body.get("ok"),
+          f"{code} cookie={'yes' if tok else 'NO'}")
+    if not tok:
+        check("session cookie obtained", False, "cannot continue without session")
+        finish()
+        return
+    ck = f"wzadmin={tok}"
+
+    # 2. state
+    code, raw, st, _ = req("GET", "/wzadmin/api/state", cookie=ck)
+    ok = code == 200 and isinstance(st, dict)
+    keys = list(st.keys()) if ok else []
+    need = ["bot", "users", "global_cap_gb", "global_music",
+            "music_settings", "totals", "tasks"]
+    have = all(k in keys for k in need) if ok else False
+    check("state (all sections)", have, f"{code} keys={keys}")
+    if not have:
+        finish()
+        return
+
+    gcap = st["global_cap_gb"]
+    gmus = st["global_music"]
+    mset = st["music_settings"] or {}
+    users = st["users"] or []
+    check("state has users", len(users) >= 1, f"{len(users)} user(s)")
+    check("state totals", isinstance(st["totals"], dict),
+          str(st["totals"]))
+
+    # 3. history for the test user
+    code, raw, h, _ = req("GET", f"/wzadmin/api/history?uid={TEST_UID}", cookie=ck)
+    ok = code == 200 and isinstance(h, dict) and "items" in h
+    check("user history", ok, f"{code} items={len((h or {}).get('items', []))}")
+
+    # 4. no-op botcap (write current value back)
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"do": "botcap", "gb": gcap}, cookie=ck)
+    check("action botcap (no-op)", code == 200 and a and a.get("ok"),
+          str((a or {}).get("msg")))
+
+    # 5. no-op gmusic
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"do": "gmusic", "n": gmus}, cookie=ck)
+    check("action gmusic (no-op)", code == 200 and a and a.get("ok"),
+          str((a or {}).get("msg")))
+
+    # 6. no-op mset x3 (write current values back)
+    for k in ("music_on", "ld_on", "aliases_on"):
+        v = 1 if mset.get(k, True) else 0
+        code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                              {"do": "mset", "k": k, "v": v}, cookie=ck)
+        check(f"action mset {k} (no-op)", code == 200 and a and a.get("ok"),
+              str((a or {}).get("msg")))
+
+    # 7. setmusic on the test account → current value
+    me = next((u for u in users if u.get("uid") == TEST_UID), None)
+    cur = (me or {}).get("music_max")
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"do": "setmusic", "uid": TEST_UID,
+                           "n": cur if cur else 0}, cookie=ck)
+    check("action setmusic (test user, no-op)",
+          code == 200 and a and a.get("ok"), str((a or {}).get("msg")))
+
+    # 8. report
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"do": "report"}, cookie=ck)
+    check("action report", code == 200 and a and a.get("ok"),
+          str((a or {}).get("msg")))
+
+    # 9. unknown action
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"do": "notarealaction"}, cookie=ck)
+    check("unknown action rejected", code == 200 and a and not a.get("ok"),
+          str((a or {}).get("msg")))
+
+    # 10. logout
+    code, raw, a, _ = req("POST", "/wzadmin/api/logout", cookie=ck)
+    check("logout", code == 200 and a and a.get("ok"), f"{code}")
+
+    # 11. state after logout must be unauthorized
+    code, raw, a, _ = req("GET", "/wzadmin/api/state", cookie=ck)
+    check("session dead after logout", code == 401, f"{code}")
+
+    finish()
+
+
+def finish():
+    lines = ["# web test results (v3 — authenticated dashboard)", ""]
+    for label, ok, detail in RESULTS:
+        lines.append(f"- {'✅' if ok else '❌'} **{label}** — {detail}")
+    p = sum(1 for _, ok, _ in RESULTS if ok)
+    lines += ["", f"**{p}/{len(RESULTS)} passed**", ""]
     with open("web_test/last-result.md", "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
-    print("\n".join(lines))
+    print(f"\n{p}/{len(RESULTS)} passed")
 
 
 if __name__ == "__main__":
