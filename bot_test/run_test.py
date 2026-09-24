@@ -421,12 +421,17 @@ async def main(scenario, arg):
     else:
         sys.exit(f"unknown scenario {scenario}")
 
-    await adapter.stop()
     open(RESULT, "w", encoding="utf-8").write(
         f"# bot test: {scenario} {arg or ''}\n\n```\n"
         + "\n".join(LOG) + "\n```\n"
     )
     print("RESULT_WRITTEN")
+    sys.stdout.flush()
+    try:
+        await asyncio.wait_for(adapter.stop(), timeout=15)
+    except Exception:
+        pass
+    os._exit(0)
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
