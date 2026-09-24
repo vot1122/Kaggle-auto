@@ -259,7 +259,11 @@ async def make_adapter(cfg):
     api_hash = os.environ.get("TG_API_HASH") or cfg_val("API_HASH") or ""
     if raw.startswith("WZ_"):
         from wzgram import Client as WZClient
-        return WZClient(api_id, api_hash, raw)
+        try:
+            return WZClient("bot_test", api_id=api_id, api_hash=api_hash,
+                            session_string=raw, in_memory=True)
+        except TypeError:
+            return WZClient(api_id, api_hash, raw)
     sess = await detect_session(raw, cfg)
     if sess is None:
         sys.exit("could not parse the test session string")
