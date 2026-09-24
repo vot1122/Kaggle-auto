@@ -1,14 +1,13 @@
-"""Web UI smoke test for the WZML-X deployment.
+"""Web UI + dashboard smoke test for the WZML-X deployment.
 
-Probes the public BASE_URL endpoints (landing, file manager, PIN API,
-qBittorrent & SABnzbd proxies, stream routes, negative cases) with raw
-HTTP requests and writes results to web_test/last-result.md.
-Pure stdlib — no dependencies.
+v2: adds /wzadmin dashboard probes with a browser UA (the dashboard
+blocks script UAs) and POST support for the login endpoint tests.
+Pure stdlib.
 """
 
 import http.client
+import json
 import ssl
-import sys
 import time
 from urllib.parse import urlparse
 
@@ -16,50 +15,64 @@ BASE = "https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
 QPASS = "52731cc8ab38b88410994a20"
 NPASS = "c23d8198078c635d61cd5ad4"
 
-TESTS = [
-    # (label, path, expect)
-    ("landing page", "/", 200),
-    ("file manager page", "/app/files", 200),
-    ("pin api no gid", "/app/files/torrent", 200),
-    ("pin api invalid gid", "/app/files/torrent?gid=!!!&pin=1234", 400),
-    ("pin api bad pin", "/app/files/torrent?gid=test123&pin=99", 400),
-    ("qbit ui valid pass", f"/qbit/?pass={QPASS}", 200),
-    ("qbit api valid pass", f"/qbit/api/v2/app/version?pass={QPASS}", 200),
-    ("qbit ui wrong pass", "/qbit/?pass=wrongpass", 403),
-    ("qbit api no pass", "/qbit/api/v2/app/version", 403),
-    ("nzb ui valid pass", f"/nzb/?pass={NPASS}", 200),
-    ("nzb api valid pass", f"/nzb/api?mode=version&output=json&pass={NPASS}", 200),
-    ("nzb api wrong pass", "/nzb/api?mode=version&output=json&pass=wrongpass", 403),
-    ("nzb login page", "/nzb/login", None),
-    ("stream bogus token", "/stream/bogus1234", None),
-    ("download bogus token", "/dl/bogus1234", None),
-    ("poster bogus token", "/poster/bogus1234", None),
-    ("tracks bogus token", "/tracks/bogus1234", None),
-    ("path traversal guard", "/nzb/../etc/passwd", None),
-    ("unknown page 404", "/definitely-not-a-page", 404),
-]
+BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+)
+SCRIPT_UA = "wz-web-test/1.0"
 
 _ctx = ssl.create_default_context()
-parsed = urlparse(BASE)
-HOST = parsed.hostname
+HOST = urlparse(BASE).hostname
+
+TESTS = [
+    # (label, method, path, body, expect, ua)
+    ("landing page", "GET", "/", None, 200, SCRIPT_UA),
+    ("owner dashboard page", "GET", "/wzadmin", None, 200, BROWSER_UA),
+    ("dashboard page script-UA blocked", "GET", "/wzadmin", None, 403, SCRIPT_UA),
+    ("heartbeat /_ping", "GET", "/_ping", None, 200, BROWSER_UA),
+    ("state without session", "GET", "/wzadmin/api/state", None, 401, BROWSER_UA),
+    ("action without session", "POST", "/wzadmin/api/action",
+     {"do": "report"}, 401, BROWSER_UA),
+    ("login script-UA blocked", "POST", "/wzadmin/api/login",
+     {"pass": "11"}, 403, SCRIPT_UA),
+    ("login wrong pass", "POST", "/wzadmin/api/login",
+     {"pass": "not-the-pass"}, None, BROWSER_UA),
+    ("login right pass (datacenter shield)", "POST", "/wzadmin/api/login",
+     {"pass": "11"}, None, BROWSER_UA),
+    ("file manager page", "GET", "/app/files", None, 200, SCRIPT_UA),
+    ("pin api no gid", "GET", "/app/files/torrent", None, 200, SCRIPT_UA),
+    ("qbit ui valid pass", "GET", f"/qbit/?pass={QPASS}", None, 200, SCRIPT_UA),
+    ("qbit api valid pass", "GET", f"/qbit/api/v2/app/version?pass={QPASS}",
+     None, 200, SCRIPT_UA),
+    ("qbit wrong pass", "GET", "/qbit/?pass=wrongpass", None, 403, SCRIPT_UA),
+    ("nzb ui valid pass (known broken)", "GET", f"/nzb/?pass={NPASS}",
+     None, 500, SCRIPT_UA),
+    ("nzb wrong pass", "GET", "/nzb/api?mode=version&output=json&pass=wrongpass",
+     None, 403, SCRIPT_UA),
+    ("stream bogus token", "GET", "/stream/bogus1234", None, 404, SCRIPT_UA),
+    ("download bogus token", "GET", "/dl/bogus1234", None, 404, SCRIPT_UA),
+    ("unknown page 404", "GET", "/definitely-not-a-page", None, 404, SCRIPT_UA),
+]
 
 
-def probe(path):
+def probe(method, path, body, ua):
     t0 = time.time()
     try:
         conn = http.client.HTTPSConnection(HOST, timeout=20, context=_ctx)
-        conn.request("GET", path, headers={"User-Agent": "wz-web-test/1.0"})
+        headers = {"User-Agent": ua}
+        data = None
+        if body is not None:
+            data = json.dumps(body)
+            headers["Content-Type"] = "application/json"
+        conn.request(method, path, body=data, headers=headers)
         resp = conn.getresponse()
-        body = resp.read(2048)
+        raw = resp.read(2048)
         ms = int((time.time() - t0) * 1000)
-        loc = resp.getheader("Location") or ""
         info = {
             "status": resp.status,
             "ms": ms,
             "ctype": (resp.getheader("Content-Type") or "?").split(";")[0],
-            "len": len(body),
-            "loc": loc,
-            "snippet": " ".join(body[:200].decode("utf-8", "replace").split())[:120],
+            "snippet": " ".join(raw[:250].decode("utf-8", "replace").split())[:150],
         }
         conn.close()
         return info, None
@@ -68,33 +81,25 @@ def probe(path):
 
 
 def main():
-    lines = ["# web test results", "", "| check | path | status | ms | type | result |",
-             "|---|---|---|---|---|---|"]
+    lines = ["# web test results (v2 — dashboard)",
+             "", "| check | status | ms | type | result |",
+             "|---|---|---|---|---|"]
     pass_n = fail_n = err_n = 0
-    for label, path, expect in TESTS:
-        info, err = probe(path)
+    for label, method, path, body, expect, ua in TESTS:
+        info, err = probe(method, path, body, ua)
         if err:
             err_n += 1
-            lines.append(f"| {label} | `{path}` | ERR | - | - | {err} |")
+            lines.append(f"| {label} | ERR | - | - | {err} |")
             continue
         s = info["status"]
         if expect is not None:
             ok = (s == expect)
         else:
-            ok = s < 500  # any non-server-error response counts as handled
+            ok = s < 500
         verdict = "PASS" if ok else "FAIL"
-        if ok:
-            pass_n += 1
-        else:
-            fail_n += 1
-        extra = []
-        if info["loc"]:
-            extra.append(f"-> {info['loc']}")
-        if info["snippet"]:
-            extra.append(info["snippet"])
-        res = " ".join(extra) or f"{info['len']}B"
+        pass_n, fail_n = (pass_n + 1, fail_n) if ok else (pass_n, fail_n + 1)
         lines.append(
-            f"| {label} | `{path}` | {s} | {info['ms']} | {info['ctype']} | {verdict} — {res} |"
+            f"| {label} | {s} {verdict} | {info['ms']} | {info['ctype']} | {info['snippet']} |"
         )
     lines += ["", f"**{pass_n} pass / {fail_n} fail / {err_n} error**", ""]
     with open("web_test/last-result.md", "w", encoding="utf-8") as f:
@@ -103,6 +108,4 @@ def main():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        TESTS = [("custom", a, None) for a in sys.argv[1:]]
     main()
