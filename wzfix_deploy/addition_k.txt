@@ -1,0 +1,197 @@
+    # Kaggle addition K — v15.62 Round 5: per-link stream passwords.
+    # A stream link (/stream/<token>) can carry its own password in
+    # MongoDB; it then stops accepting the global STREAM_PASS. The
+    # serve/meta gates, the auth API and the password modal all learn
+    # the link token. Fails open on DB errors.
+    ok_j = 0
+    try:
+        wzfix_dir5 = os.path.join(WZMLX_DIR, "bot/helper/wzfix")
+        os.makedirs(wzfix_dir5, exist_ok=True)
+        with open(
+            os.path.join(wzfix_dir5, "r5_streampass.py"), "w", encoding="utf-8"
+        ) as f:
+            f.write(base64.b64decode(WZFIX_R5_STREAMPASS_B64).decode("utf-8"))
+        ok_j += 1
+        log("  r5: wrote r5_streampass.py")
+    except Exception as e:
+        log(f"  r5 write FAILED — {e}", "ERROR")
+
+    # K-2: stream_server.py — r5 import + per-link gates + auth branch
+    ss5_path = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+    try:
+        with open(ss5_path, "r", encoding="utf-8") as f:
+            ss5 = f.read()
+        imp5_old = "from ..core.config_manager import Config\n# USER_STREAM_PATCHED"
+        imp5_new = (
+            "from ..core.config_manager import Config\n"
+            "# USER_STREAM_PATCHED\n"
+            "from ..helper.wzfix.r5_streampass import (  # WZFIX_R5\n"
+            "    path_token as _r5_path_token,\n"
+            "    get_link_pass as _r5_get_link_pass,\n"
+            "    serve_ok as _r5_serve_ok,\n"
+            ")"
+        )
+        if imp5_old in ss5 and "WZFIX_R5" not in ss5:
+            ss5 = ss5.replace(imp5_old, imp5_new, 1)
+            ok_j += 1
+        gate5_old = (
+            "async def _serve(request, kind):\n"
+            "    # KAGGLE_AUTH_GATE: user-account streams (?user=1) require\n"
+            "    # the stream password (only when STREAM_PASS is set).\n"
+            "    # Bot-account streams stay open — password is a\n"
+            "    # user-account feature only.\n"
+            "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+            "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+            "        )\n"
+            "    _, cid, mid = await _resolve(request)\n"
+        )
+        gate5_new = (
+            "async def _serve(request, kind):\n"
+            "    # WZFIX_R5_GATE: per-link stream passwords — a link with\n"
+            "    # its own password requires it on every request; links\n"
+            "    # without one keep the legacy behavior below.\n"
+            "    if not await _r5_serve_ok(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+            "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+            "        )\n"
+            "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+            "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+            "        )\n"
+            "    _, cid, mid = await _resolve(request)\n"
+        )
+        if gate5_old in ss5 and "WZFIX_R5_GATE" not in ss5:
+            ss5 = ss5.replace(gate5_old, gate5_new, 1)
+            ok_j += 1
+        meta5_old = (
+            "    if use_user and not _us_check_auth(request):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+        )
+        meta5_new = (
+            "    if not await _r5_serve_ok(request) or (  # WZFIX_R5_META\n"
+            "        use_user and not _us_check_auth(request)\n"
+            "    ):\n"
+            "        raise web.HTTPUnauthorized(\n"
+            "            text=\"authenticate first\",\n"
+        )
+        if meta5_old in ss5 and "WZFIX_R5_META" not in ss5:
+            ss5 = ss5.replace(meta5_old, meta5_new, 1)
+            ok_j += 1
+        auth5_old = (
+            "async def _ks_auth_api(request):\n"
+            "    try:\n"
+            "        body = await request.json()\n"
+            "    except Exception:\n"
+            "        body = {}\n"
+            "    import hmac as _ks_hmac\n"
+            "    password = _us_get_pass()\n"
+            "    if not password:\n"
+            "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+            "    submitted = body.get(\"password\", \"\")\n"
+            "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+            "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+            "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})"
+        )
+        auth5_new = (
+            "async def _ks_auth_api(request):\n"
+            "    try:\n"
+            "        body = await request.json()\n"
+            "    except Exception:\n"
+            "        body = {}\n"
+            "    import hmac as _ks_hmac\n"
+            "    # WZFIX_R5_AUTH: a per-link password has priority for its link\n"
+            "    _tok5 = str(body.get(\"token\", \"\") or \"\")\n"
+            "    if _tok5:\n"
+            "        try:\n"
+            "            _lp5 = await _r5_get_link_pass(_tok5)\n"
+            "        except Exception:\n"
+            "            _lp5 = None\n"
+            "        if _lp5 is not None:\n"
+            "            _sub5 = str(body.get(\"password\", \"\") or \"\")\n"
+            "            if not _sub5 or not _ks_hmac.compare_digest(_sub5, _lp5):\n"
+            "                return web.json_response(\n"
+            "                    {\"error\": \"wrong password\"}, status=401)\n"
+            "            return web.json_response(\n"
+            "                {\"token\": _us_sign(_lp5), \"expires\": 86400,\n"
+            "                 \"link\": _tok5})\n"
+            "    password = _us_get_pass()\n"
+            "    if not password:\n"
+            "        return web.json_response({\"error\": \"STREAM_PASS not set\"})\n"
+            "    submitted = body.get(\"password\", \"\")\n"
+            "    if not submitted or not _ks_hmac.compare_digest(submitted, password):\n"
+            "        return web.json_response({\"error\": \"wrong password\"}, status=401)\n"
+            "    return web.json_response({\"token\": _us_sign(password), \"expires\": 86400})"
+        )
+        if auth5_old in ss5 and "WZFIX_R5_AUTH" not in ss5:
+            ss5 = ss5.replace(auth5_old, auth5_new, 1)
+            ok_j += 1
+        with open(ss5_path, "w", encoding="utf-8") as f:
+            f.write(ss5)
+        if "WZFIX_R5" in ss5:
+            r5c = subprocess.run(
+                [sys.executable, "-m", "py_compile", ss5_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            if r5c.returncode != 0:
+                log(f"  r5 stream_server compile FAILED: {(r5c.stderr or '')[-400:]}", "ERROR")
+            else:
+                log(f"  r5 stream_server: per-link gates applied ({ok_j} edits, compiles)")
+    except Exception as e:
+        log(f"  r5 stream_server FAILED — {e}", "ERROR")
+
+    # K-3: stall_ui.js — the password modal must send the link token
+    sui5_path = os.path.join(WZMLX_DIR, "web/templates/stall_ui.js")
+    try:
+        with open(sui5_path, "r", encoding="utf-8") as f:
+            sui5 = f.read()
+        sui5_old = "body: JSON.stringify({ password: password }),"
+        sui5_new = (
+            "body: JSON.stringify({\n"
+            "            password: password,\n"
+            "            token: (window.location.pathname.split(\"/\").pop() || \"\"),\n"
+            "          }),"
+        )
+        if sui5_old in sui5 and "token: (window.location.pathname" not in sui5:
+            sui5 = sui5.replace(sui5_old, sui5_new, 1)
+            with open(sui5_path, "w", encoding="utf-8") as f:
+                f.write(sui5)
+            ok_j += 1
+        log("  r5 stall_ui: password POST carries the link token")
+    except Exception as e:
+        log(f"  r5 stall_ui FAILED — {e}", "ERROR")
+
+    # K-4: register /streampass (owner/sudo)
+    hd5_path = os.path.join(WZMLX_DIR, "bot/core/handlers.py")
+    try:
+        with open(hd5_path, "r", encoding="utf-8") as f:
+            hd5 = f.read()
+        if "wzfix_streampass" not in hd5:
+            hd5 += (
+                '\n    # WZFIX r5 streampass (v15.62)\n'
+                '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
+                '    TgClient.bot.add_handler(\n'
+                '        MessageHandler(\n'
+                '            wzfix_streampass,\n'
+                '            filters=command("streampass", case_sensitive=True)\n'
+                '            & CustomFilters.sudo,\n'
+                '        )\n'
+                '    )\n'
+            )
+            with open(hd5_path, "w", encoding="utf-8") as f:
+                f.write(hd5)
+            ok_j += 1
+        r5h = subprocess.run(
+            [sys.executable, "-m", "py_compile", hd5_path],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r5h.returncode != 0:
+            log(f"  r5 handlers compile FAILED: {(r5h.stderr or '')[-400:]}", "ERROR")
+        else:
+            log(f"  r5 handlers: /streampass registered (total {ok_j} edits)")
+    except Exception as e:
+        log(f"  r5 handlers FAILED — {e}", "ERROR")
