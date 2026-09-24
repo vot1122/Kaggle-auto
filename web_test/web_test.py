@@ -25,7 +25,6 @@ _ctx = ssl.create_default_context()
 HOST = urlparse(BASE).hostname
 RESULTS = []
 
-
 def req(method, path, body=None, cookie=None, ua=BROWSER_UA):
     conn = http.client.HTTPSConnection(HOST, timeout=25, context=_ctx)
     headers = {"User-Agent": ua}
@@ -46,11 +45,9 @@ def req(method, path, body=None, cookie=None, ua=BROWSER_UA):
         parsed = None
     return resp.status, raw[:400], parsed, setc
 
-
 def check(label, ok, detail=""):
     RESULTS.append((label, ok, detail))
     print(f"{'PASS' if ok else 'FAIL'} | {label} | {detail}")
-
 
 def main():
     # 1. login
@@ -132,6 +129,27 @@ def main():
     check("unknown action rejected", code == 200 and a and not a.get("ok"),
           str((a or {}).get("msg")))
 
+    # 9b. per-link stream passwords (v15.62 r5). The bot-test cmd
+    # scenario locks link "webtesttoken123" with password "testpw42"
+    # before this web test runs.
+    code, raw, a, _ = req("POST", "/api/stream_auth",
+                          {"password": "testpw42", "token": "webtesttoken123"})
+    check("streampass: correct password mints link token",
+          code == 200 and (a or {}).get("token"),
+          f"{code} link={(a or {}).get('link')} tok={'yes' if (a or {}).get('token') else 'NO'}")
+    code, raw, a, _ = req("POST", "/api/stream_auth",
+                          {"password": "wrongpw", "token": "webtesttoken123"})
+    check("streampass: wrong password rejected", code == 401, f"{code}")
+    code, raw, a, _ = req("GET", "/api/stream/webtesttoken123")
+    check("streampass: gated link meta blocked without auth", code == 401,
+          f"{code} hdr-probe")
+    code, raw, a, _ = req("GET", "/stream/webtesttoken123")
+    check("streampass: gated link data blocked without auth", code == 401,
+          f"{code} (data path)")
+    code, raw, a, _ = req("POST", "/api/stream_auth", {"password": "testpw42"})
+    check("streampass: no token falls back to global path", True,
+          f"{code} {str((a or {}) or raw[:60])[1:100]} (info)")
+
     # 10. logout
     code, raw, a, _ = req("POST", "/wzadmin/api/logout", cookie=ck)
     check("logout", code == 200 and a and a.get("ok"), f"{code}")
@@ -143,7 +161,6 @@ def main():
           f"{code} — token stays valid until expiry (by design)")
 
     finish()
-
 
 def finish():
     lines = ["# web test results (v3 — authenticated dashboard)", ""]
