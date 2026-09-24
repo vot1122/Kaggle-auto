@@ -58,7 +58,29 @@ def cfg_val(key):
                 return v
     return ""
 
+def ffprobe(path):
+    r = subprocess.run(
+        ["ffprobe", "-v", "quiet", "-print_format", "json",
+         "-show_format", path],
+        capture_output=True, text=True,
+    )
+    try:
+        f = json.loads(r.stdout).get("format", {})
+    except Exception:
+        return {}
+    tags = f.get("tags", {}) or {}
+    return {
+        "codec": f.get("format_name", ""),
+        "bitrate": f.get("bit_rate", ""),
+        "duration": f.get("duration", ""),
+        "title": tags.get("title", tags.get("TITLE", "")),
+        "artist": tags.get("artist", tags.get("ARTIST", "")),
+        "file": os.path.basename(path),
+    }
+
 class Msg:
+    """Normalized message across Telethon / Pyrogram."""
+
     def __init__(self, id, text, buttons, fname, size, raw):
         self.id, self.text, self.buttons = id, text, buttons
         self.fname, self.size, self.raw = fname, size, raw
@@ -129,6 +151,7 @@ class TelethonAdapter:
             size = m.document.size or 0
         return Msg(m.id, m.text or "", buttons, fname, size, m)
 
+
 class PyrogramAdapter:
     """Backed by the wzgram-provided pyrogram module (drop-in fork):
     handles both standard Pyrogram strings and native WZGram WZ_ strings."""
@@ -174,6 +197,7 @@ class PyrogramAdapter:
                 pass
             out.append(Msg(m.id, m.text or m.caption or "", buttons,
                            fname, size, m))
+        out.reverse()  # newest-first -> chronological
         return out
 
     async def download(self, raw, fname=None):
@@ -211,6 +235,7 @@ class PyrogramAdapter:
                    (m.document.file_name if m.document else "") or "",
                    (m.document.file_size if m.document else 0) or 0, m)
 
+
 DC_IPS = {1: "149.154.175.53", 2: "149.154.167.51",
           3: "149.154.175.100", 4: "149.154.167.91", 5: "91.108.56.130"}
 
@@ -228,46 +253,175 @@ def _telethon_string_from(dc, key_bytes):
 
 def _b64_key(key):
     import base64
-    return base64.b64decode(key + "=" * (-len(key) % 4))
-
-async def detect_session(raw, cfg):
-    """Return a Telethon-style session string from any supported format."""
-    if raw.startswith("WZ_"):
-        try:
-            from wzgram.session import parse_wz_string
-            sess = parse_wz_string(raw)
-            return _telethon_string_from(sess.dc_id, sess.auth_key)
-        except ImportError:
-            pass
-        except Exception:
-            pass
-    if re.match(r"^[0-9]+:[A-Za-z0-9_-]+$", raw or ""):
-        return raw  # already a Telethon StringSession
-    m = re.match(r"^([0-9]+):([A-Za-z0-9+/=_-]+)$", raw or "")
-    if m and len(m.group(2)) > 300:
-        try:
-            return _telethon_string_from(m.group(1), _b64_key(m.group(2)))
-        except Exception:
-            return None
+    try:
+        kb = base64.urlsafe_b64decode(key + "=" * (-len(key) % 4))
+        if len(kb) == 256:
+            return kb
+    except Exception:
+        pass
+    try:
+        kb = bytes.fromhex(key)
+        if len(kb) == 256:
+            return kb
+    except Exception:
+        pass
     return None
 
-async def make_adapter(cfg):
-    raw = os.environ.get("TG_TEST_SESSION") or cfg_val("TEST_SESSION")
+def normalize_session(s):
+    """Handle prefixed/custom session formats (e.g. older WZ_ variants).
+    Returns a standard Telethon or Pyrogram session string. Diagnostics
+    never include auth key material."""
+    s = s.strip()
+    if not s.startswith("WZ_"):
+        return s
+    inner = s[3:].strip()
+    diag = [f"payload len={len(inner)}"]
+    if inner[:1] in ("1", "B"):
+        log("[session] WZ_ + standard string")
+        return inner
+    import base64
+    import binascii
+    import json as _json
+
+    def _try_decode(x):
+        for cand in (x, x.replace("+", "-").replace("/", "_")):
+            for pad in range(4):
+                try:
+                    r = base64.urlsafe_b64decode(cand + "=" * pad)
+                    if len(r) >= 100:
+                        return r
+                except (binascii.Error, ValueError):
+                    continue
+        return None
+
+    raw = None
+    for cand, desc in ((inner, "as-is"), (inner[1:], "strip-first"),
+                        (inner[:-1], "strip-last")):
+        raw = _try_decode(cand)
+        if raw:
+            diag.append(f"decoded {len(raw)}B from {desc} "
+                        f"head={raw[:4].hex()}")
+            break
     if not raw:
-        sys.exit("no test session (TG_TEST_SESSION / TEST_SESSION)")
-    api_id = int(os.environ.get("TG_API_ID") or cfg_val("API_ID") or 0)
-    api_hash = os.environ.get("TG_API_HASH") or cfg_val("API_HASH") or ""
-    if raw.startswith("WZ_"):
-        from wzgram import Client as WZClient
+        diag.append(f"not-base64 starts={inner[:6]!r}")
+        sys.exit("WZ_ session not parseable (1): " + "; ".join(diag))
+    if raw[:1] in (b"{", b"["):
         try:
-            return WZClient("bot_test", api_id=api_id, api_hash=api_hash,
-                            session_string=raw, in_memory=True)
-        except TypeError:
-            return WZClient(api_id, api_hash, raw)
-    sess = await detect_session(raw, cfg)
-    if sess is None:
-        sys.exit("could not parse the test session string")
-    return TelethonAdapter(api_id, api_hash, sess)
+            d = _json.loads(raw)
+            if isinstance(d, list):
+                d = d[0] if d and isinstance(d[0], dict) else {}
+            diag.append(f"json keys={sorted(d)[:12]}")
+
+            def _find(obj, names):
+                if isinstance(obj, dict):
+                    for n in names:
+                        if n in obj and obj[n] not in (None, "", 0, False):
+                            return obj[n]
+                    for v in obj.values():
+                        r = _find(v, names)
+                        if r is not None:
+                            return r
+                return None
+            dc = _find(d, ("dc", "dc_id", "DC", "datacenter", "server_dc"))
+            key = _find(d, ("auth_key", "authKey", "key", "authorization"))
+            if dc and isinstance(key, str) and len(key) >= 64:
+                kb = _b64_key(key)
+                if kb:
+                    st = _telethon_string_from(int(dc), kb)
+                    log(f"[session] WZ_ JSON converted (dc={dc})")
+                    return st
+                diag.append("auth key present but not 256B")
+        except Exception as e:
+            diag.append(f"json-error {e}")
+    # pyrogram-style raw binary: dc(1) api_id(4) test(1) key(256)...
+    if len(raw) >= 262 and raw[0] in (1, 2, 3, 4, 5):
+        st = _telethon_string_from(raw[0], raw[6:262])
+        log(f"[session] WZ_ binary (pyrogram layout) converted "
+            f"(dc={raw[0]})")
+        return st
+    if len(raw) >= 263 and raw[0] in (1, 2, 3, 4, 5):
+        # telethon layout: dc(1) ip(4) port(2) key(256)
+        st = _telethon_string_from(raw[0], raw[7:263])
+        log(f"[session] WZ_ binary (telethon layout) converted "
+            f"(dc={raw[0]})")
+        return st
+    try:
+        txt = raw.decode("utf-8")
+        if txt.isprintable():
+            diag.append(f"printable text starts={txt[:32]!r}")
+    except Exception:
+        pass
+    sys.exit("WZ_ session not parseable (2): " + "; ".join(diag)
+             + " -- the current WZGram format must be parsed by the "
+               "wzgram library itself")
+
+def repair_wz_session(s):
+    """Recover a WZGram WZ_ string that lost 2 characters somewhere
+    (truncated copy-paste). Uses the format's CRC32 checksum to find the
+    unique repair. Returns the repaired string, or the original if no
+    repair passes."""
+    import base64
+    import binascii
+    import struct
+    import zlib
+
+    ALPH = ("ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz" "0123456789-_")
+    V3_CRC_PACKED_SIZE = 326
+    TARGET = 435  # 326 bytes -> 435 chars (3-char tail group)
+    body = s[3:]
+    if len(body) == TARGET:
+        return s
+    if len(body) != TARGET - 2:
+        return s  # some other damage; let the library report it
+
+    def _dec(cand):
+        try:
+            raw = base64.urlsafe_b64decode(
+                cand + "=" * (-len(cand) % 4))
+        except (binascii.Error, ValueError):
+            return None
+        return raw
+
+    def _crc_ok(raw):
+        if len(raw) != V3_CRC_PACKED_SIZE:
+            return False
+        payload = raw[:-4]
+        stored = struct.unpack("<I", raw[-4:])[0]
+        return zlib.crc32(payload) == stored
+
+    order = [len(body)] + list(range(len(body)))  # end first, then start
+    for p in order:
+        prefix, suffix = body[:p], body[p:]
+        for a in ALPH:
+            for b in ALPH:
+                cand = prefix + a + b + suffix
+                raw = _dec(cand)
+                if raw and _crc_ok(raw):
+                    log(f"[session] REPAIRED: 2 missing chars at pos {p} "
+                        f"(restored '{a}{b}')")
+                    return "WZ_" + cand
+    log("[session] repair failed: no candidate passed the checksum")
+    return s
+
+def make_adapter(api_id, api_hash, session):
+    s = session.strip()
+    if s.startswith("WZ_"):
+        s = repair_wz_session(s)
+        # native WZGram (Pyrogram fork) checksummed format -- only the
+        # wzgram library itself can parse it; PyrogramAdapter is backed
+        # by the wzgram-provided pyrogram module.
+        log("[client] wzgram (native WZ_)")
+        return PyrogramAdapter(api_id, api_hash, s)
+    s = normalize_session(s).strip()
+    if s.startswith("1"):
+        log("[client] telethon")
+        return TelethonAdapter(api_id, api_hash, s)
+    if s.startswith("B"):
+        log("[client] pyrogram")
+        return PyrogramAdapter(api_id, api_hash, s)
+    sys.exit(f"unknown session format: starts {s[:3]!r} len={len(s)}")
+
 
 async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                   max_probe=10):
@@ -307,84 +461,134 @@ async def collect(adapter, chat, sent_id, cap_s, quiet_s, first_s,
                                         if re.search(
                                             r"WZFIX|ERROR|Traceback|"
                                             r"Exception|zip|Zip|artist|"
-                                            r"fan-out|upload|Upload", l)]
+                                            r"fan-out|upload|Upload",
+                                            l)]
                                 log(f"[logfile {os.path.basename(p)} "
-                                    f"tail]\n" + "\n".join(keep[-40:]))
+                                    f"{len(lines)} lines, filtered "
+                                    f"{len(keep)}]")
+                                for l in keep[-120:]:
+                                    log("  " + l[:250])
+                            else:
+                                info = ffprobe(p)
+                                info["file"] = os.path.basename(p)
+                                probed.append(info)
+                            os.remove(p)
                     except Exception as e:
                         log(f"[probe-error] {e}")
-            elif m.buttons:
-                log(f"[card] {m.text[:300]} | {m.buttons}")
-            else:
-                log(f"[text] {m.text[:300]}")
-        if msgs:
+            elif m.text:
+                log(f"[text] {m.text[:400]}")
+                if m.buttons:
+                    log(f"[buttons] {m.buttons}")
             deadline = time.time() + quiet_s
-        elif time.time() > deadline:
+        if time.time() > deadline:
             break
     return probed
 
-async def probe_audio(probed):
-    for p in probed:
-        if p.lower().endswith((".mp3", ".m4a", ".ogg", ".opus", ".flac")):
-            try:
-                r = subprocess.run(
-                    ["ffprobe", "-v", "quiet", "-print_format", "json",
-                     "-show_format", "-show_streams", p],
-                    capture_output=True, text=True, timeout=60)
-                j = json.loads(r.stdout or "{}")
-                f = j.get("format", {})
-                st = (j.get("streams") or [{}])[0]
-                tags = f.get("tags", {})
-                br = int(f.get("bit_rate") or st.get("bit_rate") or 0)
-                log(f"[ffprobe {os.path.basename(p)}] "
-                    f"codec={st.get('codec_name')} "
-                    f"bitrate={br // 1000}kbps dur={float(f.get('duration') or 0):.0f}s "
-                    f"tags={tags.get('artist')} - {tags.get('title')}")
-                return
-            except Exception as e:
-                log(f"[ffprobe-error] {e}")
-
 def verdict(scenario, probed):
+    lines = []
+    files = [l for l in LOG if l.startswith("[file]")]
     if scenario == "artist":
-        n = len(probed)
-        log(f"VERDICT: {n} file(s) probed")
+        lines.append(f"files received: {len(files)}")
+        if not files:
+            lines.append("VERDICT: FAIL -- no files delivered")
+        else:
+            lines.append(f"files ffprobed: {len(probed)}")
+            for p in probed:
+                br = int(p.get("bitrate") or 0)
+                lines.append(
+                    f"  {p['file']}: {p['codec']} {br // 1000}kbps "
+                    f"{float(p['duration'] or 0):.0f}s "
+                    f"tags={p['title']!r}/{p['artist']!r}")
+            if probed:
+                allmp3 = all("mp3" in (p["codec"] or "") for p in probed)
+                all320 = all(int(p.get("bitrate") or 0) >= 250000
+                             for p in probed)
+                named = all(" - " in (p["file"] or "") for p in probed)
+                lines.append(f"all mp3: {allmp3}, all ~320kbps: {all320}, "
+                             f"clean names: {named}")
+                lines.append(
+                    "VERDICT: " + ("PASS" if (allmp3 and all320 and named)
+                                   else "CHECK"))
+    else:
+        lines.append("VERDICT: " + ("PASS" if LOG and any(
+            l.startswith("[text]") for l in LOG) else "FAIL"))
+    return lines
+
 
 async def main(scenario, arg):
-    adapter = await make_adapter(CFG)
+    api_id = cfg_val("TELEGRAM_API")
+    api_hash = cfg_val("TELEGRAM_HASH")
+    session = os.environ.get("TG_TEST_SESSION", "").strip() \
+        or cfg_val("TEST_SESSION").strip()
+    if not (api_id and api_hash and session):
+        sys.exit("TELEGRAM_API / TELEGRAM_HASH / TG_TEST_SESSION missing")
+    adapter = make_adapter(int(api_id), api_hash, session)
     me = await adapter.start()
-    log(f"[me] {me.id} {me.first_name}")
-    chat = me.username if me.username else me.id
-    log(f"[chat] {chat}")
+    log(f"[me] {me.id} {getattr(me, 'first_name', '')}")
+    chat = BOT
 
     if scenario == "ping":
-        log("[send] /start")
         sid = await adapter.send(chat, "/start")
-        await collect(adapter, chat, sid, cap_s=60, quiet_s=20, first_s=30)
+        await collect(adapter, chat, sid, cap_s=120, quiet_s=25, first_s=60)
     elif scenario == "artist":
-        q = arg or "https://open.spotify.com/artist/6punPd0Zxa2TzQUBePZFgG"
-        log(f"[send] /yl {q}")
-        sid = await adapter.send(chat, f"/yl {q}")
-        await collect(adapter, chat, sid, cap_s=600, quiet_s=60,
-                      first_s=90)
-        probed = await collect(adapter, chat, sid, cap_s=300, quiet_s=45,
-                               first_s=45)
-        await probe_audio(probed)
-        verdict(scenario, probed)
+        url = ("https://open.spotify.com/artist/"
+               "1x02ug1CLkx7mrQP9FRswh")
+        flags = ""
+        if arg and arg.startswith("-"):
+            flags = arg  # e.g. "-z" -> zip delivery
+        elif arg:
+            url = arg
+        # bare links are ignored by design (commands only) -- use /yl
+        log(f"[send] /yl {url} {flags}".rstrip())
+        sid = await adapter.send(chat, f"/yl {url} {flags}".rstrip())
+        probed = await collect(adapter, chat, sid, cap_s=1800,
+                               quiet_s=420, first_s=180)
+        LOG.extend(verdict(scenario, probed))
     elif scenario == "song":
-        if not arg:
+        url = arg
+        if not url:
             sys.exit("song scenario needs --arg <track url>")
-        log(f"[send] /y {arg}")
-        sid = await adapter.send(chat, f"/y {arg}")
-        probed = await collect(adapter, chat, sid, cap_s=600, quiet_s=60,
-                               first_s=90)
-        await probe_audio(probed)
+        log(f"[send] /yl {url}")
+        sid = await adapter.send(chat, f"/yl {url}")
+        probed = await collect(adapter, chat, sid, cap_s=1200,
+                               quiet_s=300, first_s=120)
+        LOG.extend(verdict("artist", probed))
     elif scenario == "cmd":
-        log(f"[send] {arg}")
-        sid = await adapter.send(chat, arg)
-        await collect(adapter, chat, sid, cap_s=120, quiet_s=20, first_s=45)
+        text = arg or "/help"
+        log(f"[send] {text}")
+        sid = await adapter.send(chat, text)
+        await collect(adapter, chat, sid, cap_s=240, quiet_s=30,
+                      first_s=60)
     elif scenario == "peek":
-        log("[peek] recent dialogs:")
-        async for d in adapter.c.iter_dialogs(limit=12):
-            log(f"  {d.id} {d.name}")
+        # list the test account's recent dialogs to find where files
+        # actually landed (the hyper uploader may deliver via a
+        # different peer than the bot PM)
+        me_id = me.id
+        seen = 0
+        async for d in adapter.c.get_dialogs(limit=20):
+            c = d.chat
+            title = getattr(c, "first_name", None) or getattr(c, "title", "") or ""
+            uname = getattr(c, "username", "") or ""
+            last = d.top_message if d.top_message is not None else None
+            if last is None or getattr(c, "id", 0) == me_id:
+                continue
+            last_from = getattr(getattr(last, "from_user", None), "username", "") or ""
+            fname, size = "", 0
+            doc = getattr(last, "document", None)
+            aud = getattr(last, "audio", None)
+            if doc:
+                fname = doc.file_name or ""
+                size = doc.file_size or 0
+            elif aud:
+                fname = aud.file_name or ""
+                size = aud.file_size or 0
+            if fname or seen < 8:
+                seen += 1
+                log(f"[dialog] id={c.id} {title} @{uname} "
+                    f"last=<{last.id}> by @{last_from} "
+                    f"file={fname!r} {size / 1048576:.1f}MB "
+                    f"text={(last.text or last.caption or '')[:60]!r}")
+        await asyncio.sleep(2)
     elif scenario == "ld":
         q = arg or "Locked In Bhalwaan"
         log(f"[send] /ld {q}")
@@ -423,8 +627,7 @@ async def main(scenario, arg):
 
     open(RESULT, "w", encoding="utf-8").write(
         f"# bot test: {scenario} {arg or ''}\n\n```\n"
-        + "\n".join(LOG) + "\n```\n"
-    )
+        + "\n".join(LOG) + "\n```\n")
     print("RESULT_WRITTEN")
     sys.stdout.flush()
     try:
@@ -432,6 +635,7 @@ async def main(scenario, arg):
     except Exception:
         pass
     os._exit(0)
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
