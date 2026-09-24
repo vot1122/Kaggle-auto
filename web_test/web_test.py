@@ -129,9 +129,15 @@ def main():
     check("unknown action rejected", code == 200 and a and not a.get("ok"),
           str((a or {}).get("msg")))
 
-    # 9b. per-link stream passwords (v15.62 r5). The bot-test cmd
-    # scenario locks link "webtesttoken123" with password "testpw42"
-    # before this web test runs.
+    # 9b. per-link stream passwords (v15.62 r5 + v15.63 dashboard).
+    # Lock a link through the dashboard itself, verify the full auth
+    # chain, then unlock it again.
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"action": "spset",
+                           "link": ".../stream/webtesttoken123",
+                           "pass": "testpw42"}, cookie=ck)
+    check("streampass: dashboard spset", code == 200 and a and a.get("ok"),
+          str((a or {}).get("msg")))
     code, raw, a, _ = req("POST", "/api/stream_auth",
                           {"password": "testpw42", "token": "webtesttoken123"})
     check("streampass: correct password mints link token",
@@ -146,8 +152,19 @@ def main():
     code, raw, a, _ = req("GET", "/stream/webtesttoken123")
     check("streampass: gated link data blocked without auth", code == 401,
           f"{code} (data path)")
-    code, raw, a, _ = req("POST", "/api/stream_auth", {"password": "testpw42"})
-    check("streampass: no token falls back to global path", True,
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"action": "splist"}, cookie=ck)
+    check("streampass: dashboard splist shows the link",
+          code == 200 and a and "webtesttoken123" in str((a or {}).get("msg", "")),
+          str((a or {}).get("msg"))[:80])
+    code, raw, a, _ = req("POST", "/wzadmin/api/action",
+                          {"action": "spdel",
+                           "link": "webtesttoken123"}, cookie=ck)
+    check("streampass: dashboard spdel", code == 200 and a and a.get("ok"),
+          str((a or {}).get("msg")))
+    code, raw, a, _ = req("POST", "/api/stream_auth",
+                          {"password": "testpw42", "token": "webtesttoken123"})
+    check("streampass: after del, link falls back to global", True,
           f"{code} {str((a or {}) or raw[:60])[1:100]} (info)")
 
     # 10. logout
