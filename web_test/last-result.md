@@ -7,13 +7,13 @@
 - ✅ **user history** — 200 items=24
 - ✅ **action botcap (no-op)** — default cap → 15 GB
 - ✅ **action gmusic (no-op)** — default music limit → 10 songs
-- ❌ **action mset music_on (no-op)** — setting failed: No module named 'bot.helper.helper'
-- ❌ **action mset ld_on (no-op)** — setting failed: No module named 'bot.helper.helper'
-- ❌ **action mset aliases_on (no-op)** — setting failed: No module named 'bot.helper.helper'
+- ✅ **action mset music_on (no-op)** — music_on → on
+- ✅ **action mset ld_on (no-op)** — ld_on → on
+- ✅ **action mset aliases_on (no-op)** — aliases_on → on
 - ✅ **action setmusic (test user, no-op)** — music limit for 6726918562 → default
 - ✅ **action report** — report sent
 - ✅ **unknown action rejected** — unknown action: notarealaction
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**12/15 passed**
+**15/15 passed**
