@@ -21,7 +21,9 @@
 - ✅ **streampass: dashboard splist shows the link** — webtesttoken123 → testpw42; vaRKGIQ → testpw1
 - ✅ **streampass: dashboard spdel** — removed — back to the global password
 - ✅ **streampass: after del, link falls back to global** — 401 'error': 'wrong password'} (info)
+- ✅ **loop-fix: real gated link probe (info)** — 404 — link or its password no longer present
+- ❌ **loop-fix: stream page serves the v15.65 fixes** — 200 jsfix=no urlfix=no
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**21/23 passed**
+**22/25 passed**
