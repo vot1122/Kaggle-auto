@@ -2,7 +2,6 @@ name: Deploy WZFIX Version
 
 # One-shot: applies tools patch to kaggle_notebook.py, commits it, then
 # pushes the notebook to Kaggle (new version = fresh session).
-
 on:
   workflow_dispatch:
 
@@ -27,8 +26,8 @@ jobs:
         run: |
           git config user.name "sarvam-test"
           git config user.email "bot-test@users.noreply.github.com"
-          git add kaggle_notebook.py
-          git commit -m "wzfix: v15.51 (yl is_leech propagation)" && git push || echo "no changes"
+          git add kaggle_notebook.py bot_test/run_test.py
+          git commit -m "wzfix: version deploy (notebook + runner)" && git push || echo "no changes"
 
       - name: Install pinned Kaggle CLI
         run: pip install kaggle==1.6.17
