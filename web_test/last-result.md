@@ -22,8 +22,8 @@
 - ✅ **streampass: dashboard spdel** — removed — back to the global password
 - ✅ **streampass: after del, link falls back to global** — 401 'error': 'wrong password'} (info)
 - ✅ **loop-fix: real gated link probe (info)** — 404 — link or its password no longer present
-- ❌ **loop-fix: stream page serves the v15.65 fixes** — 200 jsfix=no urlfix=no
+- ✅ **loop-fix: stream page serves the v15.65 fixes** — 200 jsfix=yes urlfix=yes
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**22/25 passed**
+**23/25 passed**
