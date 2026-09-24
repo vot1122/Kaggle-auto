@@ -1,25 +1,25 @@
-# web test results
+# web test results (v2 — dashboard)
 
-| check | path | status | ms | type | result |
-|---|---|---|---|---|---|
-| landing page | `/` | 200 | 830 | text/html | PASS — <!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initia |
-| file manager page | `/app/files` | 200 | 419 | text/html | PASS — <!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initia |
-| pin api no gid | `/app/files/torrent` | 200 | 358 | application/json | PASS — {"files":[],"engine":"","error":"GID is missing","message":"GID not specified"} |
-| pin api invalid gid | `/app/files/torrent?gid=!!!&pin=1234` | 200 | 364 | application/json | FAIL — {"files":[],"engine":"","error":"Invalid GID","message":"Invalid GID"} |
-| pin api bad pin | `/app/files/torrent?gid=test123&pin=99` | 200 | 365 | application/json | FAIL — {"files":[],"engine":"","error":"Invalid pin","message":"The PIN you entered is incorrect. Try Again!"} |
-| qbit ui valid pass | `/qbit/?pass=52731cc8ab38b88410994a20` | 200 | 366 | text/html | PASS — <!DOCTYPE html> <html lang="C"> <head> <meta charset="UTF-8" /> <meta http-equiv="X-UA-Compatible" content="IE=10" /> <m |
-| qbit api valid pass | `/qbit/api/v2/app/version?pass=52731cc8ab38b88410994a20` | 200 | 399 | text/plain | PASS — v4.4.1 |
-| qbit ui wrong pass | `/qbit/?pass=wrongpass` | 403 | 387 | text/html | PASS — <h1>403: Unauthorized access</h1> |
-| qbit api no pass | `/qbit/api/v2/app/version` | 403 | 352 | text/html | PASS — <h1>403: Unauthorized access</h1> |
-| nzb ui valid pass | `/nzb/?pass=c23d8198078c635d61cd5ad4` | 500 | 351 | text/html | FAIL — <h1>500: Internal server error</h1> |
-| nzb api valid pass | `/nzb/api?mode=version&output=json&pass=c23d8198078c635d61cd5ad4` | 500 | 361 | text/html | FAIL — <h1>500: Internal server error</h1> |
-| nzb api wrong pass | `/nzb/api?mode=version&output=json&pass=wrongpass` | 403 | 620 | text/html | PASS — <h1>403: Unauthorized access</h1> |
-| nzb login page | `/nzb/login` | 403 | 350 | text/html | PASS — <h1>403: Unauthorized access</h1> |
-| stream bogus token | `/stream/bogus1234` | 404 | 535 | text/plain | PASS — unknown link |
-| download bogus token | `/dl/bogus1234` | 404 | 469 | text/plain | PASS — unknown link |
-| poster bogus token | `/poster/bogus1234` | 404 | 737 | text/html | PASS — <h1>404: No artwork</h1> |
-| tracks bogus token | `/tracks/bogus1234` | 404 | 352 | application/json | PASS — {"detail":"Not Found"} |
-| path traversal guard | `/nzb/../etc/passwd` | 404 | 361 | application/json | PASS — {"detail":"Not Found"} |
-| unknown page 404 | `/definitely-not-a-page` | 404 | 316 | application/json | PASS — {"detail":"Not Found"} |
+| check | status | ms | type | result |
+|---|---|---|---|---|
+| landing page | 200 PASS | 577 | text/html | <!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta name="them |
+| owner dashboard page | 200 PASS | 563 | text/html | <!doctype html> <html lang="en" data-theme="onyx"> <head> <meta charset="utf-8"> <meta name="viewport" content="width=device-width,initial-scale=1,vie |
+| dashboard page script-UA blocked | 403 PASS | 195 | text/plain | forbidden |
+| heartbeat /_ping | 404 FAIL | 300 | application/json | {"detail":"Not Found"} |
+| state without session | 401 PASS | 437 | application/json | {"error": "unauthorized"} |
+| action without session | 401 PASS | 283 | application/json | {"error": "unauthorized"} |
+| login script-UA blocked | 403 PASS | 151 | application/json | {"error": "forbidden"} |
+| login wrong pass | 401 PASS | 848 | application/json | {"error": "wrong password"} |
+| login right pass (datacenter shield) | 200 PASS | 846 | application/json | {"ok": true} |
+| file manager page | 200 PASS | 361 | text/html | <!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0"> <meta name="them |
+| pin api no gid | 200 PASS | 473 | application/json | {"files":[],"engine":"","error":"GID is missing","message":"GID not specified"} |
+| qbit ui valid pass | 200 PASS | 510 | text/html | <!DOCTYPE html> <html lang="C"> <head> <meta charset="UTF-8" /> <meta http-equiv="X-UA-Compatible" content="IE=10" /> <meta name="application-name" co |
+| qbit api valid pass | 200 PASS | 233 | text/plain | v4.4.1 |
+| qbit wrong pass | 403 PASS | 264 | text/html | <h1>403: Unauthorized access</h1> |
+| nzb ui valid pass (known broken) | 500 PASS | 381 | text/html | <h1>500: Internal server error</h1> |
+| nzb wrong pass | 403 PASS | 244 | text/html | <h1>403: Unauthorized access</h1> |
+| stream bogus token | 404 PASS | 432 | text/plain | unknown link |
+| download bogus token | 404 PASS | 371 | text/plain | unknown link |
+| unknown page 404 | 404 PASS | 251 | application/json | {"detail":"Not Found"} |
 
-**15 pass / 4 fail / 0 error**
+**18 pass / 1 fail / 0 error**
