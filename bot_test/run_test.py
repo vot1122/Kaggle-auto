@@ -130,6 +130,30 @@ class TelethonAdapter:
                               .replace("/", "_")[:180])
         return await raw.download_media(file=target)
 
+    async def press_button(self, chat, msg, label):
+        for row in msg.raw.buttons:
+            for b in row:
+                if label in (b.text or ""):
+                    await b.click()
+                    return True
+        return False
+
+    async def get_msg(self, chat, mid):
+        m = await self.c.get_messages(chat, ids=mid)
+        if not m:
+            return None
+        buttons = []
+        if m.text and m.buttons:
+            buttons = [b.text for row in m.buttons for b in row]
+        fname, size = "", 0
+        if m.document:
+            for at in m.document.attributes:
+                if getattr(at, "file_name", None):
+                    fname = at.file_name
+            size = m.document.size or 0
+        return Msg(m.id, m.text or "", buttons, fname, size, m)
+
+
 
 class PyrogramAdapter:
     """Backed by the wzgram-provided pyrogram module (drop-in fork):
@@ -182,6 +206,36 @@ class PyrogramAdapter:
         target = os.path.join(DL_DIR, (fname or "file.bin")
                               .replace("/", "_")[:180])
         return await self.c.download_media(raw, file_name=target)
+
+    async def press_button(self, chat, msg, label):
+        rm = msg.raw.reply_markup
+        if not rm:
+            return False
+        for row in rm.inline_keyboard:
+            for b in row:
+                if label in (b.text or ""):
+                    await self.c.request_callback_answer(
+                        chat_id=chat, message_id=msg.raw.id,
+                        callback_data=b.callback_data,
+                    )
+                    return True
+        return False
+
+    async def get_msg(self, chat, mid):
+        m = await self.c.get_messages(chat, mid)
+        if not m:
+            return None
+        buttons = []
+        try:
+            rm = m.reply_markup
+            if rm is not None and hasattr(rm, "inline_keyboard"):
+                buttons = [b.text for row in rm.inline_keyboard for b in row]
+        except Exception:
+            pass
+        return Msg(m.id, m.text or m.caption or "", buttons,
+                   (m.document.file_name if m.document else "") or "",
+                   (m.document.file_size if m.document else 0) or 0, m)
+
 
 
 DC_IPS = {1: "149.154.175.53", 2: "149.154.167.51",
@@ -548,6 +602,34 @@ async def main(scenario, arg):
         log(f"[send] /ld {q}")
         sid = await adapter.send(chat, f"/ld {q}")
         await collect(adapter, chat, sid, cap_s=300, quiet_s=60, first_s=60)
+        # press the No button on the confirm card and capture what follows
+        try:
+            msgs = await adapter.fetch_new(chat, sid)
+            card = next(
+                (m for m in msgs
+                 if "Did you mean" in (m.text or "") and m.buttons),
+                None,
+            )
+            if card is None:
+                log("[ld] confirm card not found")
+            else:
+                log(f"[ld] card buttons: {card.buttons}")
+                await adapter.press_button(chat, card, "No")
+                log("[ld] pressed No, waiting for the list...")
+                await asyncio.sleep(10)
+                fresh = await adapter.get_msg(chat, card.id)
+                if fresh is None:
+                    log("[ld] card could not be re-fetched")
+                else:
+                    txt = fresh.text or ""
+                    log(f"[ld] after No text: {txt[:500]!r}")
+                    log(f"[ld] after No buttons: {fresh.buttons}")
+                    if "Matches for your lyrics" in txt:
+                        log("[ld] RESULT: list shown after No — OK")
+                    else:
+                        log("[ld] RESULT: list NOT shown after No")
+        except Exception as e:
+            log(f"[ld-button-error] {e}")
     else:
         sys.exit(f"unknown scenario {scenario}")
 

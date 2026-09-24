@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.60  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.61  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2003,9 +2003,20 @@ WZFIX_R4_CMDS_B64 = (
     "ICAgICkKICAgICAgICByZXR1cm4KICAgIGF3YWl0IF9sZF9lZGl0KAogICAgICAgIGNiLm1lc3NhZ2UsCiAgICAgICAgIvCfjqcg"
     "PGI+TWF0Y2hlcyBmb3IgeW91ciBseXJpY3M8L2I+XG5cblRhcCBvbmUgdG8gZG93bmxvYWQ6IiwKICAgICAgICBfbGRfcGFnZV9r"
     "YihzdCksCiAgICApCgoKYXN5bmMgZGVmIG11c2ljX2xkX25vKGNsaWVudCwgY2IpOgogICAgYXdhaXQgY2IuYW5zd2VyKCkKICAg"
-    "IG9yaWcsIHN0ID0gX2xkX29yaWcoY2IpCiAgICBpZiBvcmlnIGlzIG5vdCBOb25lOgogICAgICAgIF9MRF9TVEFURS5wb3AoZ2V0"
-    "YXR0cihvcmlnLCAiaWQiLCBOb25lKSwgTm9uZSkKICAgIGF3YWl0IF9sZF9lZGl0KAogICAgICAgIGNiLm1lc3NhZ2UsICLinYwg"
-    "Tm8gbWF0Y2hlcyBmb3VuZCDigJQgdHJ5IHdpdGggZGlmZmVyZW50IGtleXdvcmRzIgogICAgKQo="
+    "IG9yaWcsIHN0ID0gX2xkX29yaWcoY2IpCiAgICB0eHQgPSAoZ2V0YXR0cihjYi5tZXNzYWdlLCAidGV4dCIsICIiKSBvciAiIikK"
+    "ICAgIGlmICJNYXRjaGVzIGZvciB5b3VyIGx5cmljcyIgaW4gdHh0OgogICAgICAgICMgQ2FuY2VsIGZyb20gdGhlIGxpc3Qgdmll"
+    "dyDigJQgZW5kIHRoZSBzZWFyY2gKICAgICAgICBpZiBvcmlnIGlzIG5vdCBOb25lOgogICAgICAgICAgICBfTERfU1RBVEUucG9w"
+    "KGdldGF0dHIob3JpZywgImlkIiwgTm9uZSksIE5vbmUpCiAgICAgICAgYXdhaXQgX2xkX2VkaXQoCiAgICAgICAgICAgIGNiLm1l"
+    "c3NhZ2UsICLinYwgU2VhcmNoIGNhbmNlbGxlZCDigJQgc2VuZCAvbGQgYWdhaW4gYW55dGltZSIKICAgICAgICApCiAgICAgICAg"
+    "cmV0dXJuCiAgICBpZiBub3Qgc3Q6CiAgICAgICAgYXdhaXQgX2xkX2VkaXQoCiAgICAgICAgICAgIGNiLm1lc3NhZ2UsICLinYwg"
+    "U2VhcmNoIGV4cGlyZWQg4oCUIHNlbmQgL2xkIGFnYWluIgogICAgICAgICkKICAgICAgICByZXR1cm4KICAgIGlmIGxlbihzdFsi"
+    "aGl0cyJdKSA8IDI6CiAgICAgICAgX0xEX1NUQVRFLnBvcChnZXRhdHRyKG9yaWcsICJpZCIsIE5vbmUpLCBOb25lKQogICAgICAg"
+    "IGF3YWl0IF9sZF9lZGl0KAogICAgICAgICAgICBjYi5tZXNzYWdlLCAi4p2MIE5vIG90aGVyIG1hdGNoZXMgZm91bmQg4oCUIHRy"
+    "eSBkaWZmZXJlbnQga2V5d29yZHMiCiAgICAgICAgKQogICAgICAgIHJldHVybgogICAgIyAiTm8iIG9uIHRoZSBjb25maXJtIGNh"
+    "cmQg4oaSIHNob3cgdGhlIE9USEVSIG1hdGNoZXMKICAgIHN0WyJoaXRzIl0gPSBzdFsiaGl0cyJdWzE6XQogICAgc3RbImN1cnNv"
+    "ciJdID0gMAogICAgX2xvZygiV1pGSVggL2xkOiBubyDihpIgc2hvd2luZyBvdGhlciBtYXRjaGVzIikKICAgIGF3YWl0IF9sZF9l"
+    "ZGl0KAogICAgICAgIGNiLm1lc3NhZ2UsCiAgICAgICAgIvCfjqcgPGI+TWF0Y2hlcyBmb3IgeW91ciBseXJpY3M8L2I+XG5cblRh"
+    "cCBvbmUgdG8gZG93bmxvYWQ6IiwKICAgICAgICBfbGRfcGFnZV9rYihzdCksCiAgICApCg=="
 )
 
 
@@ -3790,12 +3801,12 @@ def apply_userrepo_patches():
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.60"\n'
+                'WZFIX_BUILD = "v15.61"\n'
                 'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.60 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.60 running")
+        log("  r1: versions.py written (v15.61 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.61 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -5764,7 +5775,7 @@ def apply_userrepo_patches():
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.60) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.61) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -5779,7 +5790,7 @@ def apply_userrepo_patches():
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.60): the hyper"
+                "            # WZFIX music keep-chat (v15.61): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
