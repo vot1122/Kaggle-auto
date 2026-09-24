@@ -1,0 +1,92 @@
+    # Kaggle addition N — v15.65 Round 6b: stream page auth-loop fix.
+    # The stream page sent its boot probe and the video/download src
+    # WITHOUT the auth token for normal (non-user) links, so a correct
+    # password just reloaded into the same 401 — an endless password
+    # prompt and the video never played. Now the token (localStorage or
+    # the ?auth= URL param) is appended to every stream request and the
+    # page URLs carry location.search.
+    try:
+        p1 = os.path.join(WZMLX_DIR, "web/templates/stall_ui.js")
+        with open(p1, "r", encoding="utf-8") as f:
+            js = f.read()
+        if "getToken() || params.get" in js:
+            log("  r6b stall_ui: already patched")
+        else:
+            o1 = (
+                "    var token = getToken();\n"
+                '    if (token && params.get("user") === "1") {\n'
+                '      q += (q ? "&" : "?") + "auth=" + encodeURIComponent(token);\n'
+                "    }"
+            )
+            n1 = (
+                "    var token = getToken() || params.get(\"auth\");\n"
+                "    if (token) {\n"
+                '      q += (q ? "&" : "?") + "auth=" + encodeURIComponent(token);\n'
+                "    }"
+            )
+            o2 = (
+                '        if (userMode && urlStr.indexOf("user=") < 0) {\n'
+                '          urlStr += (urlStr.indexOf("?") >= 0 ? "&" : "?") + "user=1";\n'
+                "          var token = getToken();\n"
+                '          if (token && urlStr.indexOf("auth=") < 0) {\n'
+                '            urlStr += "&auth=" + encodeURIComponent(token);\n'
+                "          }\n"
+                "          // Always pass a string URL to origFetch, not the original Request object\n"
+                "          url = urlStr;\n"
+                "        }"
+            )
+            n2 = (
+                '        var _tokN = getToken() || urlParams().get("auth");\n'
+                '        if (_tokN && urlStr.indexOf("auth=") < 0) {\n'
+                '          urlStr += (urlStr.indexOf("?") >= 0 ? "&" : "?") + "auth=" + encodeURIComponent(_tokN);\n'
+                "          url = urlStr;\n"
+                "        }\n"
+                '        if (userMode && urlStr.indexOf("user=") < 0) {\n'
+                '          urlStr += (urlStr.indexOf("?") >= 0 ? "&" : "?") + "user=1";\n'
+                "          // Always pass a string URL to origFetch, not the original Request object\n"
+                "          url = urlStr;\n"
+                "        }"
+            )
+            c1 = js.count(o1)
+            c2 = js.count(o2)
+            if c1 == 1:
+                js = js.replace(o1, n1, 1)
+            if c2 == 1:
+                js = js.replace(o2, n2, 1)
+            with open(p1, "w", encoding="utf-8") as f:
+                f.write(js)
+            log(f"  r6b stall_ui: q-fix {c1}/1, fetch-fix {c2}/1")
+
+        p2 = os.path.join(WZMLX_DIR, "web/templates/stream.html")
+        with open(p2, "r", encoding="utf-8") as f:
+            ht = f.read()
+        if "encodeURIComponent(TOKEN) + location.search" in ht:
+            log("  r6b stream.html: already patched")
+        else:
+            o3 = (
+                '            var STREAM = location.origin + "/stream/" '
+                "+ encodeURIComponent(TOKEN);"
+            )
+            n3 = (
+                '            var STREAM = location.origin + "/stream/" '
+                "+ encodeURIComponent(TOKEN) + location.search;"
+            )
+            o4 = (
+                '            var DIRECT = location.origin + "/dl/" '
+                "+ encodeURIComponent(TOKEN);"
+            )
+            n4 = (
+                '            var DIRECT = location.origin + "/dl/" '
+                "+ encodeURIComponent(TOKEN) + location.search;"
+            )
+            c3 = ht.count(o3)
+            c4 = ht.count(o4)
+            if c3 == 1:
+                ht = ht.replace(o3, n3, 1)
+            if c4 == 1:
+                ht = ht.replace(o4, n4, 1)
+            with open(p2, "w", encoding="utf-8") as f:
+                f.write(ht)
+            log(f"  r6b stream.html: STREAM {c3}/1, DIRECT {c4}/1")
+    except Exception as e:
+        log(f"  r6b FAILED — {e}", "ERROR")
