@@ -36,14 +36,14 @@ def req(method, path, body=None, cookie=None, ua=BROWSER_UA):
         headers["Cookie"] = cookie
     conn.request(method, path, body=data, headers=headers)
     resp = conn.getresponse()
-    raw = resp.read(65536)
+    raw = resp.read(524288)
     setc = resp.getheader("Set-Cookie") or ""
     conn.close()
     try:
         parsed = json.loads(raw.decode("utf-8", "replace"))
     except Exception:
         parsed = None
-    return resp.status, raw[:20000], parsed, setc
+    return resp.status, raw[:524288], parsed, setc
 
 def check(label, ok, detail=""):
     RESULTS.append((label, ok, detail))
