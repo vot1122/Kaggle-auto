@@ -187,11 +187,12 @@ def main():
         check("loop-fix: real gated link 200 with minted token",
               code == 200, f"{code} tok={'yes' if tok else 'NO'}")
     code, raw, a, _ = req("GET", "/xstrm/vaRKGIQ")
+    html = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
     check("loop-fix: stream page serves the v15.65 fixes",
-          code == 200 and "location.search" in raw
-          and "getToken() || params.get" in raw,
-          f"{code} jsfix={'yes' if 'getToken() || params.get' in raw else 'no'}"
-          f" urlfix={'yes' if 'location.search' in raw else 'no'}")
+          code == 200 and "location.search" in html
+          and "getToken() || params.get" in html,
+          f"{code} jsfix={'yes' if 'getToken() || params.get' in html else 'no'}"
+          f" urlfix={'yes' if 'location.search' in html else 'no'}")
 
     # 10. logout
     code, raw, a, _ = req("POST", "/wzadmin/api/logout", cookie=ck)
