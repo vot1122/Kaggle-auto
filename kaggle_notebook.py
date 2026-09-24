@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.64  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.65  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2024,7 +2024,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.64) — per-link stream passwords.
+# WZFIX Round 5 (v15.65) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -3936,7 +3936,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.64 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.65 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4110,7 +4110,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.64)\n'
+                '\n    # WZFIX r5 streampass (v15.65)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4135,7 +4135,7 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.64 Round 6: /start user registry.
+    # Kaggle addition M — v15.65 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4207,6 +4207,99 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
+    # Kaggle addition N — v15.65 Round 6b: stream page auth-loop fix.
+    # The stream page sent its boot probe and the video/download src
+    # WITHOUT the auth token for normal (non-user) links, so a correct
+    # password just reloaded into the same 401 — an endless password
+    # prompt and the video never played. Now the token (localStorage or
+    # the ?auth= URL param) is appended to every stream request and the
+    # page URLs carry location.search.
+    try:
+        p1 = os.path.join(WZMLX_DIR, "web/templates/stall_ui.js")
+        with open(p1, "r", encoding="utf-8") as f:
+            js = f.read()
+        if "getToken() || params.get" in js:
+            log("  r6b stall_ui: already patched")
+        else:
+            o1 = (
+                "    var token = getToken();\n"
+                '    if (token && params.get("user") === "1") {\n'
+                '      q += (q ? "&" : "?") + "auth=" + encodeURIComponent(token);\n'
+                "    }"
+            )
+            n1 = (
+                "    var token = getToken() || params.get(\"auth\");\n"
+                "    if (token) {\n"
+                '      q += (q ? "&" : "?") + "auth=" + encodeURIComponent(token);\n'
+                "    }"
+            )
+            o2 = (
+                '        if (userMode && urlStr.indexOf("user=") < 0) {\n'
+                '          urlStr += (urlStr.indexOf("?") >= 0 ? "&" : "?") + "user=1";\n'
+                "          var token = getToken();\n"
+                '          if (token && urlStr.indexOf("auth=") < 0) {\n'
+                '            urlStr += "&auth=" + encodeURIComponent(token);\n'
+                "          }\n"
+                "          // Always pass a string URL to origFetch, not the original Request object\n"
+                "          url = urlStr;\n"
+                "        }"
+            )
+            n2 = (
+                '        var _tokN = getToken() || urlParams().get("auth");\n'
+                '        if (_tokN && urlStr.indexOf("auth=") < 0) {\n'
+                '          urlStr += (urlStr.indexOf("?") >= 0 ? "&" : "?") + "auth=" + encodeURIComponent(_tokN);\n'
+                "          url = urlStr;\n"
+                "        }\n"
+                '        if (userMode && urlStr.indexOf("user=") < 0) {\n'
+                '          urlStr += (urlStr.indexOf("?") >= 0 ? "&" : "?") + "user=1";\n'
+                "          // Always pass a string URL to origFetch, not the original Request object\n"
+                "          url = urlStr;\n"
+                "        }"
+            )
+            c1 = js.count(o1)
+            c2 = js.count(o2)
+            if c1 == 1:
+                js = js.replace(o1, n1, 1)
+            if c2 == 1:
+                js = js.replace(o2, n2, 1)
+            with open(p1, "w", encoding="utf-8") as f:
+                f.write(js)
+            log(f"  r6b stall_ui: q-fix {c1}/1, fetch-fix {c2}/1")
+
+        p2 = os.path.join(WZMLX_DIR, "web/templates/stream.html")
+        with open(p2, "r", encoding="utf-8") as f:
+            ht = f.read()
+        if "encodeURIComponent(TOKEN) + location.search" in ht:
+            log("  r6b stream.html: already patched")
+        else:
+            o3 = (
+                '            var STREAM = location.origin + "/stream/" '
+                "+ encodeURIComponent(TOKEN);"
+            )
+            n3 = (
+                '            var STREAM = location.origin + "/stream/" '
+                "+ encodeURIComponent(TOKEN) + location.search;"
+            )
+            o4 = (
+                '            var DIRECT = location.origin + "/dl/" '
+                "+ encodeURIComponent(TOKEN);"
+            )
+            n4 = (
+                '            var DIRECT = location.origin + "/dl/" '
+                "+ encodeURIComponent(TOKEN) + location.search;"
+            )
+            c3 = ht.count(o3)
+            c4 = ht.count(o4)
+            if c3 == 1:
+                ht = ht.replace(o3, n3, 1)
+            if c4 == 1:
+                ht = ht.replace(o4, n4, 1)
+            with open(p2, "w", encoding="utf-8") as f:
+                f.write(ht)
+            log(f"  r6b stream.html: STREAM {c3}/1, DIRECT {c4}/1")
+    except Exception as e:
+        log(f"  r6b FAILED — {e}", "ERROR")
+
     # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
     # library, owner cap commands, and DB stats/cleanup.
     # Two new self-contained modules are written into the tree; three small
@@ -4233,12 +4326,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.64"\n'
+                'WZFIX_BUILD = "v15.65"\n'
                 'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.64 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.64 running")
+        log("  r1: versions.py written (v15.65 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.65 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -6207,7 +6300,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.64) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.65) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -6222,7 +6315,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.64): the hyper"
+                "            # WZFIX music keep-chat (v15.65): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
