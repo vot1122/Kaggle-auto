@@ -1,0 +1,44 @@
+name: Web Test
+
+# Probes the WZML-X web UI endpoints (landing, file manager, PIN API,
+# qBittorrent/SABnzbd proxies, stream routes, negative cases) from the
+# runner and commits results to web_test/last-result.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+        urls:
+            description: "optional extra paths to probe (space-separated)"
+            required: false
+            default: ""
+            type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-test
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run web test
+        run: python web_test/web_test.py ${{ inputs.urls }}
+
+      - name: Commit results
+        if: always()
+        run: |
+          git config user.name "sarvam-test"
+          git config user.email "bot-test@users.noreply.github.com"
+          git add web_test/last-result.md || true
+          git commit -m "web-test results" && git push || echo "no result changes"
