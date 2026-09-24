@@ -1,15 +1,22 @@
-"""One-shot patch: v15.62 -> v15.63.
+"""One-shot patch: v15.63 -> v15.64.
 
-J-39 dashboard stream-password management: spset / spdel / splist
-actions + UI buttons on /wzadmin, wired to r5_streampass.
+J-40 Round 6 user access management:
+  - dashboard: /start users registry (wzfix_startusers) with
+    authorize / sudo / block toggles (r2_web REPL via v1564_web_repl)
+  - services.py: record every /start sender (addition M)
 """
 
 import ast
 import base64
+import os
 import py_compile
 import re
 import sys
 import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "wzfix_deploy"))
+from v1564_web_repl import REPL  # noqa: E402
 
 P = "kaggle_notebook.py"
 s = open(P, encoding="utf-8").read()
@@ -19,17 +26,10 @@ if not m:
     sys.exit("WZFIX_WEB_B64 block not found")
 web = base64.b64decode(ast.literal_eval("(" + m.group(1) + ")")).decode("utf-8")
 
-REPL = [
-('        if act == "report":\n            ok, msg = await send_report()\n            return {"ok": ok, "msg": msg}\n        return {"ok": False, "msg": f"unknown action: {act}"}', '        if act == "report":\n            ok, msg = await send_report()\n            return {"ok": ok, "msg": msg}\n        if act == "spset":\n            from .r5_streampass import extract_token, set_link_pass\n\n            tok = extract_token(str(a.get("link", "") or ""))\n            pw = str(a.get("pass", "") or "").strip()\n            if not tok:\n                return {"ok": False, "msg": "not a stream link or token"}\n            if not pw or len(pw) > 64 or " " in pw:\n                return {"ok": False, "msg": "password 1-64 chars, no spaces"}\n            await set_link_pass(tok, pw, 0)\n            await _action_log("LOCK STREAM LINK", {"link": tok})\n            return {"ok": True, "msg": f"{tok} now needs its own password"}\n        if act == "spdel":\n            from .r5_streampass import extract_token, del_link_pass\n\n            tok = extract_token(str(a.get("link", "") or ""))\n            if not tok:\n                return {"ok": False, "msg": "not a stream link or token"}\n            removed = await del_link_pass(tok)\n            await _action_log("UNLOCK STREAM LINK", {"link": tok})\n            return {"ok": True, "msg": "removed — back to the global password" if removed else "had no custom password"}\n        if act == "splist":\n            from .r5_streampass import all_link_passes\n\n            rows = await all_link_passes()\n            msg = "; ".join(d["_id"] + " → " + d["pass"] for d in rows)\n            return {"ok": True, "msg": msg or "no custom stream passwords set"}\n        return {"ok": False, "msg": f"unknown action: {act}"}'),
-    ('        <button class="btn dng" onclick="killAll()">✕ Kill all tasks</button>', '        <button class="btn" onclick="askSpSet()">🔒 Lock stream link</button>\n        <button class="btn" onclick="askSpDel()">🔓 Unlock stream link</button>\n        <button class="btn" onclick="act({action:\'splist\'},this)">📋 Stream passwords</button>\n        <button class="btn dng" onclick="killAll()">✕ Kill all tasks</button>'),
-    ('function askBotCap(){var v=prompt("Default cap for ALL users (GB)",""+(window._gcap||15));if(v===null)return;act({action:"botcap",gb:parseFloat(v)||0})}', 'function askBotCap(){var v=prompt("Default cap for ALL users (GB)",""+(window._gcap||15));if(v===null)return;act({action:"botcap",gb:parseFloat(v)||0})}\nfunction askSpSet(){var l=prompt("Stream link to lock (full URL or just the token)");if(l===null)return;var p=prompt("Password for this link (no spaces)");if(p===null||!p)return;act({action:\'spset\',link:l,pass:p})}\nfunction askSpDel(){var l=prompt("Stream link to unlock");if(l===null)return;act({action:\'spdel\',link:l})}'),
-    ('"bans": "List dashboard bans", "lockdash": "Lock/unlock dashboard",', '"bans": "List dashboard bans", "lockdash": "Lock/unlock dashboard",\n    "streampass": "Per-link stream passwords",')
-]
-
 for i, (old, new) in enumerate(REPL, 1):
     n = web.count(old)
     if n != 1:
-        sys.exit(f"anchor {i}: expected 1 match, found {n}")
+        sys.exit(f"web anchor {i}: expected 1 match, found {n}")
     web = web.replace(old, new)
 
 with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False,
@@ -48,10 +48,22 @@ block = "WZFIX_WEB_B64 = (\n" + "".join(
 ) + ")"
 s = s[:m.start()] + block + s[m.end():]
 
-n = s.count("v15.62")
-s = s.replace("v15.62", "v15.63")
+# splice addition M (services.py /start registry) into the notebook,
+# placed right before addition I so it runs after K
+with open(os.path.join(HERE, "wzfix_deploy", "addition_m.txt"),
+          encoding="utf-8") as f:
+    add_m = f.read()
+anchor_i = "    # Kaggle addition I"
+if "Kaggle addition M" not in s:
+    if anchor_i not in s:
+        sys.exit("addition-I anchor not found")
+    s = s.replace(anchor_i, add_m + "\n" + anchor_i, 1)
+    print("addition M spliced before addition I")
+
+n = s.count("v15.63")
+s = s.replace("v15.63", "v15.64")
 
 with open(P, "w", encoding="utf-8") as f:
     f.write(s)
 py_compile.compile(P, doraise=True)
-print(f"patch OK: J-39 dashboard streampass actions, {n} markers bumped to v15.63")
+print(f"patch OK: J-40 user access management, {n} markers bumped to v15.64")

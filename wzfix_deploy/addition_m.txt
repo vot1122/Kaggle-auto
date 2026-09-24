@@ -1,0 +1,71 @@
+    # Kaggle addition M — v15.64 Round 6: /start user registry.
+    # Every /start sender is recorded in wzfix_startusers so the owner
+    # can see and manage them from the dashboard (authorize / sudo /
+    # block toggles live in r2_web).
+    sv_path = os.path.join(WZMLX_DIR, "bot/modules/services.py")
+    try:
+        with open(sv_path, "r", encoding="utf-8") as f:
+            sv = f.read()
+        sv_old = "async def start(_, message):\n    userid = message.from_user.id\n"
+        sv_new = (
+            "async def start(_, message):\n"
+            "    userid = message.from_user.id\n"
+            "    # WZFIX_R6: record the /start sender for the dashboard\n"
+            "    try:\n"
+            "        await _wzfix_record_start(message)\n"
+            "    except Exception:\n"
+            "        pass\n"
+        )
+        hook_ok = 0
+        if sv_old in sv and "WZFIX_R6" not in sv:
+            sv = sv.replace(sv_old, sv_new, 1)
+            hook_ok = 1
+        helper_m = '''
+
+async def _wzfix_record_start(message):
+    """WZFIX_R6: upsert the /start sender into wzfix_startusers."""
+    try:
+        from time import time as _t
+
+        from bot.core.config_manager import Config
+        from bot.core.tg_client import db_partition_id
+        from bot.helper.ext_utils.db_handler import database
+
+        u = message.from_user
+        uid = u.id
+        part = db_partition_id(Config.BOT_TOKEN.split(":", 1)[0])
+        name = " ".join(x for x in (u.first_name, u.last_name) if x)
+        await database.db.wzfix_startusers[part].update_one(
+            {"_id": uid},
+            {
+                "$set": {
+                    "name": name,
+                    "uname": ("@" + u.username) if u.username else "",
+                    "last": _t(),
+                },
+                "$inc": {"starts": 1},
+                "$setOnInsert": {"first": _t()},
+            },
+            upsert=True,
+        )
+    except Exception:
+        pass
+'''
+        helper_ok = 0
+        if "async def _wzfix_record_start" not in sv:
+            sv += helper_m
+            helper_ok = 1
+        with open(sv_path, "w", encoding="utf-8") as f:
+            f.write(sv)
+        import subprocess as _sp_m
+
+        r_m = _sp_m.run(
+            [sys.executable, "-m", "py_compile", sv_path],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r_m.returncode != 0:
+            log(f"  r6 services compile FAILED: {(r_m.stderr or '')[-400:]}", "ERROR")
+        else:
+            log(f"  r6 services: /start registry hook {hook_ok}, helper {helper_ok}, compiles")
+    except Exception as e:
+        log(f"  r6 services FAILED — {e}", "ERROR")
