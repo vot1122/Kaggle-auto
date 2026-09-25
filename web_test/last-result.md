@@ -17,14 +17,15 @@
 - ✅ **streampass: correct password mints link token** — 200 link=webtesttoken123 tok=yes
 - ✅ **streampass: wrong password rejected** — 401
 - ❌ **streampass: gated link meta blocked without auth** — 404 hdr-probe
-- ❌ **streampass: gated link data blocked without auth** — 404 (data path)
+- ✅ **streampass: gated link data blocked without auth** — 401 (data path)
 - ✅ **streampass: dashboard splist shows the link** — webtesttoken123 → testpw42; vaRKGIQ → testpw1
 - ✅ **streampass: dashboard spdel** — removed — back to the global password
 - ✅ **streampass: after del, link falls back to global** — 401 'error': 'wrong password'} (info)
-- ✅ **loop-fix: real gated link probe (info)** — 404 — link or its password no longer present
+- ✅ **loop-fix: real gated link 401 without auth** — 401
+- ❌ **loop-fix: real gated link 200 with minted token** — 404 tok=yes
 - ✅ **loop-fix: stream page serves the v15.65 fixes** — 200 jsfix=yes urlfix=yes
 - ✅ **dashboard page is v15.66 (r9 applied)** — 200 connBar=yes login-hidden=no len=21359
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**24/26 passed**
+**25/27 passed**
