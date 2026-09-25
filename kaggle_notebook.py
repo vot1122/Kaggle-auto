@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.67  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.68  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2024,7 +2024,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.67) — per-link stream passwords.
+# WZFIX Round 5 (v15.68) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -3936,7 +3936,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.67 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.68 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4110,7 +4110,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.67)\n'
+                '\n    # WZFIX r5 streampass (v15.68)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4135,7 +4135,152 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.67 Round 6: /start user registry.
+    # Kaggle addition R8 — v15.68: per-link pass user-gate fix (loop).
+    # The ?user=1 gates only accepted tokens signed with the GLOBAL
+    # STREAM_PASS, so a link unlocked with its own per-link password
+    # reloaded into the password prompt forever. Also, addition K's
+    # serve/meta anchors never matched (addition G's telemetry sits
+    # between the gate and _resolve), so the r5 gates silently never
+    # applied in _serve/_meta. This addition applies both properly.
+    try:
+        _ss8 = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+        with open(_ss8, "r", encoding="utf-8") as _f:
+            _s8 = _f.read()
+        if "WZFIX_R8_LINKGATE" in _s8:
+            log("  r8: stream_server already patched")
+        else:
+            _n8 = 0
+            # R8-1: import link_token_ok next to serve_ok
+            _i_old = "    serve_ok as _r5_serve_ok,\n"
+            if (
+                "link_token_ok as _r5_link_token_ok" not in _s8
+                and _i_old in _s8
+            ):
+                _s8 = _s8.replace(
+                    _i_old,
+                    _i_old + "    link_token_ok as _r5_link_token_ok,\n",
+                    1,
+                )
+                _n8 += 1
+            # R8-2: _serve — r5 link gate + corrected user gate
+            _g_old = (
+                "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    LOGGER.info(\n"
+            )
+            _g_new = (
+                "    if not await _r5_serve_ok(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    # WZFIX_R8_LINKGATE: a token signed with THIS link's own\n"
+                "    # password (r5 unlock) must also satisfy the user-account\n"
+                "    # gate — not just the global STREAM_PASS token. Without it\n"
+                "    # a correct per-link password looped the prompt forever.\n"
+                "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request) and not await _r5_link_token_ok(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    LOGGER.info(\n"
+            )
+            if _g_old in _s8:
+                _s8 = _s8.replace(_g_old, _g_new, 1)
+                _n8 += 1
+            # R8-3: _meta — same rule, LOGGER.warning follows the gate
+            _m_old = (
+                "    if use_user and not _us_check_auth(request):\n"
+                "        LOGGER.warning(\n"
+            )
+            _m_new = (
+                "    if not await _r5_serve_ok(request):  # WZFIX_R5_META\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    # WZFIX_R8_META: a token signed with THIS link's own\n"
+                "    # password (r5 unlock) must also satisfy the user-account\n"
+                "    # gate — same rule as the serve gate (r8 link gate).\n"
+                "    if use_user and not _us_check_auth(request) and not await _r5_link_token_ok(request):\n"
+                "        LOGGER.warning(\n"
+            )
+            if _m_old in _s8:
+                _s8 = _s8.replace(_m_old, _m_new, 1)
+                _n8 += 1
+            with open(_ss8, "w", encoding="utf-8") as _f:
+                _f.write(_s8)
+            _r8c = subprocess.run(
+                [sys.executable, "-m", "py_compile", _ss8],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r8c.returncode != 0:
+                log(f"  r8: stream_server compile FAILED: {(_r8c.stderr or '')[-300:]}", "ERROR")
+            else:
+                log(f"  r8: stream_server gates patched ({_n8} edits, compiles)")
+    except Exception as e:
+        log(f"  r8: stream_server FAILED — {e}", "ERROR")
+
+    try:
+        # R8-4: r5_streampass.py — the link_token_ok helper
+        _r5p = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r5_streampass.py")
+        with open(_r5p, "r", encoding="utf-8") as _f:
+            _r5s = _f.read()
+        if "async def link_token_ok" in _r5s:
+            log("  r8: r5_streampass already has link_token_ok")
+        else:
+            _anchor = "# ─── owner command ─────────────────────────────────────────────────"
+            _ins = (
+                "\n\nasync def link_token_ok(request):\n"
+                "    \"\"\"WZFIX Round 8 (v15.68): True only when THIS link has a custom\n"
+                "    password AND the request's ?auth= token verifies against it.\n"
+                "\n"
+                "    Why: the ?user=1 gate in stream_server checks the token against\n"
+                "    the GLOBAL STREAM_PASS only. A link unlocked with its own\n"
+                "    (per-link) password got a token signed with the link password —\n"
+                "    it passed the r5 serve gate but never the user-account gate, so\n"
+                "    the page reloaded into the password prompt forever. This\n"
+                "    helper lets that gate accept a valid link token as an\n"
+                "    alternative to the global one. Fails closed on errors\n"
+                "    (returns False -> global gate applies).\"\"\"\n"
+                "    try:\n"
+                "        tok = path_token(request)\n"
+                "        if not tok:\n"
+                "            return False\n"
+                "        lp = await get_link_pass(tok)\n"
+                "        if lp is None:\n"
+                "            return False\n"
+                "        ok = verify_link_token(request.query.get(\"auth\"), lp)\n"
+                "        if ok:\n"
+                "            _log(f\"WZFIX r8: link-token auth accepted tok={tok[:12]}\")\n"
+                "        return ok\n"
+                "    except Exception as e:\n"
+                "        _log(f\"WZFIX r8: link_token_ok error: {e}\")\n"
+                "        return False\n"
+                "\n"
+            )
+            if _anchor in _r5s:
+                _r5s = _r5s.replace(_anchor, _ins + _anchor, 1)
+            else:
+                _r5s = _r5s + _ins
+            with open(_r5p, "w", encoding="utf-8") as _f:
+                _f.write(_r5s)
+            _r8d = subprocess.run(
+                [sys.executable, "-m", "py_compile", _r5p],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r8d.returncode != 0:
+                log(f"  r8: r5_streampass compile FAILED: {(_r8d.stderr or '')[-300:]}", "ERROR")
+            else:
+                log("  r8: r5_streampass link_token_ok added (compiles)")
+    except Exception as e:
+        log(f"  r8: r5_streampass FAILED — {e}", "ERROR")
+
+
+    # Kaggle addition M — v15.68 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4207,7 +4352,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
-    # Kaggle addition N — v15.67 Round 6b: stream page auth-loop fix.
+    # Kaggle addition N — v15.68 Round 6b: stream page auth-loop fix.
     # The stream page sent its boot probe and the video/download src
     # WITHOUT the auth token for normal (non-user) links, so a correct
     # password just reloaded into the same 401 — an endless password
@@ -4326,12 +4471,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.67"\n'
-                'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
+                'WZFIX_BUILD = "v15.68"\n'
+                'WZFIX_DATE = "25 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.67 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.67 running")
+        log("  r1: versions.py written (v15.68 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.68 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -4604,7 +4749,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: r2_web.py FAILED — {e}", "ERROR")
 
-    # Kaggle addition O — v15.67 Round 9: dashboard reliability fixes
+    # Kaggle addition O — v15.68 Round 9: dashboard reliability fixes
     # (login form always visible — no more black page, connection banner
     # with auto-retry, no-flicker section updates, history diff,
     # no-store headers) + stream auth loop-breaker with diagnostics +
@@ -6685,7 +6830,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.67) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.68) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -6700,7 +6845,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.67): the hyper"
+                "            # WZFIX music keep-chat (v15.68): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
