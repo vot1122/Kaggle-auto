@@ -194,6 +194,16 @@ def main():
           f"{code} jsfix={'yes' if 'getToken() || params.get' in html else 'no'}"
           f" urlfix={'yes' if 'location.search' in html else 'no'}")
 
+    # 9d. served dashboard page must be the r9/v15.66 build (connBar present,
+    # login form NOT hidden by default)
+    code, raw, a, _ = req("GET", "/wzadmin?v=66")
+    page = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+    check("dashboard page is v15.66 (r9 applied)",
+          code == 200 and "connBar" in page and 'id="login" class="login-box hidden"' not in page,
+          f"{code} connBar={'yes' if 'connBar' in page else 'no'} "
+          f"login-hidden={'yes' if 'login-box hidden' in page else 'no'} "
+          f"len={len(page)}")
+
     # 10. logout
     code, raw, a, _ = req("POST", "/wzadmin/api/logout", cookie=ck)
     check("logout", code == 200 and a and a.get("ok"), f"{code}")
