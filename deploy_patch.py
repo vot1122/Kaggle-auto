@@ -1,38 +1,74 @@
-"""One-shot patch: v15.67 -> v15.68 (Round 8: per-link pass loop fix).
+"""One-shot patch: v15.68 -> v15.69 (Round 10: artist discography fix).
 
-The ?user=1 gates in stream_server only accepted tokens signed with
-the GLOBAL STREAM_PASS — a link unlocked with its own per-link password
-reloaded into the password prompt forever. Splices addition R8 (which
-fixes both gates and adds the link_token_ok helper), bumps the version.
+Artist downloads only ever fetched Spotify's top-10 tracks because the
+catalog token was never passed the embed page JSON that contains the
+anonymous accessToken. This patch fixes the music module inside the
+notebook's WZFIX_R3_MUSIC_B64 blob: the embed JSON is now handed to the
+token helper, so the full discography (albums + singles, newest first)
+is used up to the user's limit. Also iterates all fetched albums, not
+just the first 40.
 """
+import ast
+import base64
 import py_compile
 import sys
 
 P = "kaggle_notebook.py"
 s = open(P, encoding="utf-8").read()
 
-if "v15.68" in s:
+if "v15.69" in s:
     py_compile.compile(P, doraise=True)
-    print("already v15.68 — no changes")
+    print("already v15.69 — no changes")
     sys.exit(0)
-if "v15.67" not in s:
-    sys.exit("no v15.67 markers found — unexpected notebook")
-
-ANCH = "    # Kaggle addition M — v15.67 Round 6: /start user registry."
-if "Kaggle addition R8" not in s:
-    if ANCH not in s:
-        sys.exit("addition M anchor not found")
-    add = open("wzfix_deploy/addition_r8.txt", encoding="utf-8").read()
-    assert "WZFIX_R8_LINKGATE" in add and "async def link_token_ok" in add
-    s = s.replace(ANCH, add + "\n" + ANCH, 1)
-    print("addition R8 spliced (before addition M)")
-
-n = s.count("v15.67")
-s = s.replace("v15.67", "v15.68")
-s = s.replace('WZFIX_DATE = "23 Sep 2026 (IST)"', 'WZFIX_DATE = "25 Sep 2026 (IST)"')
 if "v15.68" not in s:
+    sys.exit("no v15.68 markers found — unexpected notebook")
+
+i = s.index("WZFIX_R3_MUSIC_B64 = (")
+j = s.index("\n)", i) + 2
+src = base64.b64decode(
+    ast.literal_eval(s[i + len("WZFIX_R3_MUSIC_B64 = "):j])
+).decode("utf-8")
+
+fixes = [
+    (
+        "async def _catalog_tracks(artist_id, name, out, limit):",
+        "async def _catalog_tracks(artist_id, name, out, limit, anon_from=None):",
+    ),
+    (
+        "    tok = await _spotify_token()\n    if not tok:",
+        "    tok = await _spotify_token(anon_from)\n    if not tok:",
+    ),
+    (
+        "                out = await _catalog_tracks(\n"
+        "                    m.group(1), name, out, limit\n"
+        "                )",
+        "                out = await _catalog_tracks(\n"
+        "                    m.group(1), name, out, limit, d\n"
+        "                )",
+    ),
+    (
+        "    for alb in albums[:40]:",
+        "    for alb in albums:",
+    ),
+]
+for old, new in fixes:
+    if src.count(old) != 1:
+        sys.exit("anchor not unique: " + old[:60])
+    src = src.replace(old, new)
+
+b64 = base64.b64encode(src.encode("utf-8")).decode("ascii")
+chunks = [b64[k:k + 76] for k in range(0, len(b64), 76)]
+block = (
+    "WZFIX_R3_MUSIC_B64 = (\n"
+    + "".join('    "%s"\n' % c for c in chunks)
+    + ")"
+)
+s = s[:i] + block + s[j:]
+n = s.count("v15.68")
+s = s.replace("v15.68", "v15.69")
+if "v15.69" not in s:
     sys.exit("version marker missing after patch")
 py_compile.compile(P, doraise=True)
 with open(P, "w", encoding="utf-8") as f:
     f.write(s)
-print(f"patch OK: r8 link-gate fix, {n} markers bumped to v15.68")
+print(f"patch OK: r10 artist discography fix, {n} markers bumped to v15.69")
