@@ -1,0 +1,144 @@
+    # Kaggle addition R8 — v15.68: per-link pass user-gate fix (loop).
+    # The ?user=1 gates only accepted tokens signed with the GLOBAL
+    # STREAM_PASS, so a link unlocked with its own per-link password
+    # reloaded into the password prompt forever. Also, addition K's
+    # serve/meta anchors never matched (addition G's telemetry sits
+    # between the gate and _resolve), so the r5 gates silently never
+    # applied in _serve/_meta. This addition applies both properly.
+    try:
+        _ss8 = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+        with open(_ss8, "r", encoding="utf-8") as _f:
+            _s8 = _f.read()
+        if "WZFIX_R8_LINKGATE" in _s8:
+            log("  r8: stream_server already patched")
+        else:
+            _n8 = 0
+            # R8-1: import link_token_ok next to serve_ok
+            _i_old = "    serve_ok as _r5_serve_ok,\n"
+            if (
+                "link_token_ok as _r5_link_token_ok" not in _s8
+                and _i_old in _s8
+            ):
+                _s8 = _s8.replace(
+                    _i_old,
+                    _i_old + "    link_token_ok as _r5_link_token_ok,\n",
+                    1,
+                )
+                _n8 += 1
+            # R8-2: _serve — r5 link gate + corrected user gate
+            _g_old = (
+                "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    LOGGER.info(\n"
+            )
+            _g_new = (
+                "    if not await _r5_serve_ok(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    # WZFIX_R8_LINKGATE: a token signed with THIS link's own\n"
+                "    # password (r5 unlock) must also satisfy the user-account\n"
+                "    # gate — not just the global STREAM_PASS token. Without it\n"
+                "    # a correct per-link password looped the prompt forever.\n"
+                "    if request.query.get(\"user\") == \"1\" and not _us_check_auth(request) and not await _r5_link_token_ok(request):\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    LOGGER.info(\n"
+            )
+            if _g_old in _s8:
+                _s8 = _s8.replace(_g_old, _g_new, 1)
+                _n8 += 1
+            # R8-3: _meta — same rule, LOGGER.warning follows the gate
+            _m_old = (
+                "    if use_user and not _us_check_auth(request):\n"
+                "        LOGGER.warning(\n"
+            )
+            _m_new = (
+                "    if not await _r5_serve_ok(request):  # WZFIX_R5_META\n"
+                "        raise web.HTTPUnauthorized(\n"
+                "            text=\"authenticate first\",\n"
+                "            headers={\"X-Stream-Auth-Required\": \"1\"},\n"
+                "        )\n"
+                "    # WZFIX_R8_META: a token signed with THIS link's own\n"
+                "    # password (r5 unlock) must also satisfy the user-account\n"
+                "    # gate — same rule as the serve gate (r8 link gate).\n"
+                "    if use_user and not _us_check_auth(request) and not await _r5_link_token_ok(request):\n"
+                "        LOGGER.warning(\n"
+            )
+            if _m_old in _s8:
+                _s8 = _s8.replace(_m_old, _m_new, 1)
+                _n8 += 1
+            with open(_ss8, "w", encoding="utf-8") as _f:
+                _f.write(_s8)
+            _r8c = subprocess.run(
+                [sys.executable, "-m", "py_compile", _ss8],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r8c.returncode != 0:
+                log(f"  r8: stream_server compile FAILED: {(_r8c.stderr or '')[-300:]}", "ERROR")
+            else:
+                log(f"  r8: stream_server gates patched ({_n8} edits, compiles)")
+    except Exception as e:
+        log(f"  r8: stream_server FAILED — {e}", "ERROR")
+
+    try:
+        # R8-4: r5_streampass.py — the link_token_ok helper
+        _r5p = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r5_streampass.py")
+        with open(_r5p, "r", encoding="utf-8") as _f:
+            _r5s = _f.read()
+        if "async def link_token_ok" in _r5s:
+            log("  r8: r5_streampass already has link_token_ok")
+        else:
+            _anchor = "# ─── owner command ─────────────────────────────────────────────────"
+            _ins = (
+                "\n\nasync def link_token_ok(request):\n"
+                "    \"\"\"WZFIX Round 8 (v15.68): True only when THIS link has a custom\n"
+                "    password AND the request's ?auth= token verifies against it.\n"
+                "\n"
+                "    Why: the ?user=1 gate in stream_server checks the token against\n"
+                "    the GLOBAL STREAM_PASS only. A link unlocked with its own\n"
+                "    (per-link) password got a token signed with the link password —\n"
+                "    it passed the r5 serve gate but never the user-account gate, so\n"
+                "    the page reloaded into the password prompt forever. This\n"
+                "    helper lets that gate accept a valid link token as an\n"
+                "    alternative to the global one. Fails closed on errors\n"
+                "    (returns False -> global gate applies).\"\"\"\n"
+                "    try:\n"
+                "        tok = path_token(request)\n"
+                "        if not tok:\n"
+                "            return False\n"
+                "        lp = await get_link_pass(tok)\n"
+                "        if lp is None:\n"
+                "            return False\n"
+                "        ok = verify_link_token(request.query.get(\"auth\"), lp)\n"
+                "        if ok:\n"
+                "            _log(f\"WZFIX r8: link-token auth accepted tok={tok[:12]}\")\n"
+                "        return ok\n"
+                "    except Exception as e:\n"
+                "        _log(f\"WZFIX r8: link_token_ok error: {e}\")\n"
+                "        return False\n"
+                "\n"
+            )
+            if _anchor in _r5s:
+                _r5s = _r5s.replace(_anchor, _ins + _anchor, 1)
+            else:
+                _r5s = _r5s + _ins
+            with open(_r5p, "w", encoding="utf-8") as _f:
+                _f.write(_r5s)
+            _r8d = subprocess.run(
+                [sys.executable, "-m", "py_compile", _r5p],
+                capture_output=True, text=True, timeout=60,
+            )
+            if _r8d.returncode != 0:
+                log(f"  r8: r5_streampass compile FAILED: {(_r8d.stderr or '')[-300:]}", "ERROR")
+            else:
+                log("  r8: r5_streampass link_token_ok added (compiles)")
+    except Exception as e:
+        log(f"  r8: r5_streampass FAILED — {e}", "ERROR")
+
