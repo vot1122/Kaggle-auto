@@ -1,12 +1,8 @@
-"""One-shot patch: v15.65 -> v15.66.
+"""One-shot patch: v15.66 -> v15.67.
 
-J-42 Round 9: dashboard reliability + stream auth hardening.
-(1) the r2_web page JS had a quoting bug from Round 6 that broke the
-whole script (dashboard rendered a black page); (2) login form now
-visible without JS; (3) connection banner with auto-retry; (4)
-no-flicker section updates (history diff); (5) stream password
-loop-breaker with on-screen diagnostics; (6) full auth logging +
-log-group alerts. Addition O patches the files at boot, idempotently.
+J-43: addition O ran BEFORE the J-region r2_web.py write, so the B64
+write clobbered the dashboard fixes at every boot (page stayed black).
+Move addition O to AFTER the write (before J-1), bump version.
 """
 
 import os
@@ -16,23 +12,39 @@ import sys
 P = "kaggle_notebook.py"
 s = open(P, encoding="utf-8").read()
 
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "wzfix_deploy", "addition_o.txt"),
-          encoding="utf-8") as f:
-    add_o = f.read()
+MARK_O = "    # Kaggle addition O"
+MARK_I = "    # Kaggle addition I"
+J1 = "    # J-1: register /wzadmin routes on the bot stream server (in-process)"
 
-anchor_i = "    # Kaggle addition I"
-if "Kaggle addition O" not in s:
-    if anchor_i not in s:
-        sys.exit("addition-I anchor not found")
-    s = s.replace(anchor_i, add_o + "\n" + anchor_i, 1)
-    print("addition O spliced (after N, before I)")
+if "v15.67" in s:
+    print("already v15.67 — no changes")
+else:
+    if MARK_O not in s:
+        sys.exit("addition O not found")
+    if MARK_I not in s or J1 not in s:
+        sys.exit("anchors missing")
 
-n = s.count("v15.65")
-s = s.replace("v15.65", "v15.66")
-if "v15.66" not in s:
-    sys.exit("version marker missing after patch")
-with open(P, "w", encoding="utf-8") as f:
-    f.write(s)
-py_compile.compile(P, doraise=True)
-print(f"patch OK: J-42 dashboard+stream fixes, {n} markers bumped to v15.66")
+    o_pos = s.index(MARK_O)
+    i_pos = s.index(MARK_I)
+    j1_pos = s.index(J1)
+    r2_write_end = s.index('log(f"  r2: r2_web.py FAILED — {e}", "ERROR")', 0, j1_pos)
+
+    if o_pos < i_pos:
+        # O is before I (wrong place) — move it after the r2 write block
+        o_block = s[o_pos:i_pos].rstrip() + "\n\n"
+        s = s[:o_pos] + s[i_pos:]
+        # recompute anchors after the cut
+        j1_pos = s.index(J1)
+        s = s[:j1_pos] + o_block + s[j1_pos:]
+        print("addition O moved after the r2_web write (boot-order fix)")
+    else:
+        print("addition O already after the write")
+
+    n = s.count("v15.66")
+    s = s.replace("v15.66", "v15.67")
+    if "v15.67" not in s:
+        sys.exit("version marker missing after patch")
+    with open(P, "w", encoding="utf-8") as f:
+        f.write(s)
+    py_compile.compile(P, doraise=True)
+    print(f"patch OK: J-43 boot-order fix, {n} markers bumped to v15.67")
