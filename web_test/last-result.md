@@ -23,8 +23,8 @@
 - ✅ **streampass: after del, link falls back to global** — 401 'error': 'wrong password'} (info)
 - ✅ **loop-fix: real gated link probe (info)** — 404 — link or its password no longer present
 - ✅ **loop-fix: stream page serves the v15.65 fixes** — 200 jsfix=yes urlfix=yes
-- ❌ **dashboard page is v15.66 (r9 applied)** — 200 connBar=no login-hidden=yes len=20496
+- ✅ **dashboard page is v15.66 (r9 applied)** — 200 connBar=yes login-hidden=no len=21359
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**23/26 passed**
+**24/26 passed**
