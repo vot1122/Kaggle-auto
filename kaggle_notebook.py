@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.66  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.67  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2024,7 +2024,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.66) — per-link stream passwords.
+# WZFIX Round 5 (v15.67) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -3936,7 +3936,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.66 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.67 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4110,7 +4110,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.66)\n'
+                '\n    # WZFIX r5 streampass (v15.67)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4135,7 +4135,7 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.66 Round 6: /start user registry.
+    # Kaggle addition M — v15.67 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4207,7 +4207,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
-    # Kaggle addition N — v15.66 Round 6b: stream page auth-loop fix.
+    # Kaggle addition N — v15.67 Round 6b: stream page auth-loop fix.
     # The stream page sent its boot probe and the video/download src
     # WITHOUT the auth token for normal (non-user) links, so a correct
     # password just reloaded into the same 401 — an endless password
@@ -4300,7 +4300,311 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6b FAILED — {e}", "ERROR")
 
-    # Kaggle addition O — v15.66 Round 9: dashboard reliability fixes
+    # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
+    # library, owner cap commands, and DB stats/cleanup.
+    # Two new self-contained modules are written into the tree; three small
+    # hooks wire them into the task pipeline. Everything fails open: a quota
+    # error must never block a download.
+    try:
+        wzfix_dir = os.path.join(WZMLX_DIR, "bot/helper/wzfix")
+        os.makedirs(wzfix_dir, exist_ok=True)
+        with open(os.path.join(wzfix_dir, "__init__.py"), "w", encoding="utf-8") as f:
+            f.write("")
+        with open(os.path.join(wzfix_dir, "r1_core.py"), "w", encoding="utf-8") as f:
+            f.write(base64.b64decode(WZFIX_R1_CORE_B64).decode("utf-8"))
+        with open(os.path.join(WZMLX_DIR, "bot/modules/wzfix_admin.py"), "w", encoding="utf-8") as f:
+            f.write(base64.b64decode(WZFIX_ADMIN_B64).decode("utf-8"))
+        with open(os.path.join(wzfix_dir, "r3_music.py"), "w", encoding="utf-8") as f:
+            f.write(base64.b64decode(WZFIX_R3_MUSIC_B64).decode("utf-8"))
+        with open(os.path.join(wzfix_dir, "r4_music_cmds.py"), "w", encoding="utf-8") as f:
+            f.write(base64.b64decode(WZFIX_R4_CMDS_B64).decode("utf-8"))
+        log("  r1: wrote r1_core + r3_music + r4_music_cmds + wzfix_admin")
+
+        with open(
+            os.path.join(WZMLX_DIR, "bot/helper/wzfix/versions.py"),
+            "w",
+            encoding="utf-8",
+        ) as f:
+            f.write(
+                'WZFIX_BUILD = "v15.67"\n'
+                'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
+                'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
+            )
+        log("  r1: versions.py written (v15.67 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.67 running")
+    except Exception as e:
+        log(f"  r1: module write FAILED — {e}", "ERROR")
+
+    # I-2: quota enforcement — limit_checker (size-aware) + pre_task_check
+    tm_path = os.path.join(WZMLX_DIR, "bot/helper/ext_utils/task_manager.py")
+    try:
+        with open(tm_path, "r", encoding="utf-8") as f:
+            tm = f.read()
+        n_tm = 0
+        if "WZFIX quota check error" not in tm:
+            old_lc = (
+                '    if limit_exceeded:\n'
+                '        return limit_exceeded + f"\\n┖ <b>Task By</b> → {listener.tag}"'
+            )
+            new_lc = (
+                '    if not limit_exceeded:\n'
+                '        try:\n'
+                '            from ..wzfix.r1_core import quota_check\n'
+                '            _qmsg = await quota_check(listener)\n'
+                '            if _qmsg:\n'
+                '                limit_exceeded = _qmsg\n'
+                '        except Exception as _qe:\n'
+                '            LOGGER.error(f"WZFIX quota check error: {_qe}")\n\n'
+            ) + old_lc
+            if old_lc in tm:
+                tm = tm.replace(old_lc, new_lc, 1)
+                n_tm += 1
+            else:
+                log("  r1: limit_checker anchor not found", "WARN")
+        if "WZFIX pre-download allowance check" not in tm:
+            old_pt = (
+                '    if Config.RSS_CHAT and user_id == int(Config.RSS_CHAT):\n'
+                '        return None, None'
+            )
+            new_pt = (
+                '    try:  # WZFIX pre-download allowance check (v15.9)\n'
+                '        from ..wzfix.r1_core import precheck, over_limit_msg\n'
+                '        _qmsg = await precheck(message)\n'
+                '        if _qmsg == "__WZFIX_HANDLED__":\n'
+                '            # v15.27: precheck already replied in-place (the\n'
+                '            # checking message was EDITED into the block\n'
+                '            # message) — abort the task, send nothing more\n'
+                '            return "__WZFIX_HANDLED__", None\n'
+                '        if not _qmsg and not getattr(message, "_wzfix_held", False):\n'
+                '            _qmsg = await over_limit_msg(user_id, user_dict)\n'
+                '            if _qmsg:\n'
+                '                # v15.28: over-quota without a pre-checkable\n'
+                '                # link gets the ONE clean message + an admin\n'
+                '                # log entry, not a wrapped Task-Checks card\n'
+                '                from ..wzfix.r1_core import over_limit_reply\n'
+                '                _qmsg = await over_limit_reply(message, user_id, _qmsg)\n'
+                '                if _qmsg == "__WZFIX_HANDLED__":\n'
+                '                    return "__WZFIX_HANDLED__", None\n'
+                '        if _qmsg:\n'
+                '            msg.append(_qmsg)\n'
+                '    except Exception as _wz_e:\n'
+                '        LOGGER.error(f"WZFIX pre-check failed (allowed): {_wz_e}")\n'
+                '        pass\n\n'
+            ) + old_pt
+            if old_pt in tm:
+                tm = tm.replace(old_pt, new_pt, 1)
+                n_tm += 1
+            else:
+                log("  r1: pre_task_check anchor not found", "WARN")
+        if n_tm:
+            with open(tm_path, "w", encoding="utf-8") as f:
+                f.write(tm)
+            r = subprocess.run(
+                [sys.executable, "-m", "py_compile", tm_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            if r.returncode == 0:
+                log(f"  r1: task_manager patched ({n_tm}/2 hooks)")
+            else:
+                log(f"  r1: task_manager FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r1: task_manager patch FAILED — {e}", "ERROR")
+
+    # I-3: record finished tasks (charge quota + library index)
+    tl_path = os.path.join(WZMLX_DIR, "bot/helper/listeners/task_listener.py")
+    try:
+        with open(tl_path, "r", encoding="utf-8") as f:
+            tl = f.read()
+        if "WZFIX record failed" not in tl:
+            old_oc = (
+                '    async def on_upload_complete(\n'
+                '        self, link, files, folders, mime_type, rclone_path="", dir_id=""\n'
+                '    ):\n'
+                '        if ('
+            )
+            new_oc = (
+                '    async def on_upload_complete(\n'
+                '        self, link, files, folders, mime_type, rclone_path="", dir_id=""\n'
+                '    ):\n'
+                '        try:\n'
+                '            from ..wzfix.r1_core import record_task\n'
+                '            await record_task(self, link, files, mime_type, rclone_path, dir_id)\n'
+                '        except Exception as _we:\n'
+                '            LOGGER.error(f"WZFIX record failed: {_we}")\n'
+                '        if ('
+            )
+            if old_oc in tl:
+                tl = tl.replace(old_oc, new_oc, 1)
+                with open(tl_path, "w", encoding="utf-8") as f:
+                    f.write(tl)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", tl_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log("  r1: task_listener patched (1 hook)")
+                else:
+                    log(f"  r1: task_listener FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
+            else:
+                log("  r1: on_upload_complete anchor not found", "WARN")
+    except Exception as e:
+        log(f"  r1: task_listener patch FAILED — {e}", "ERROR")
+
+    # I-3b: reservations — free a task's bandwidth hold when it fails or is
+    # cancelled (completion releases it from record_task itself)
+    try:
+        with open(tl_path, "r", encoding="utf-8") as f:
+            tl3 = f.read()
+        n_rel = 0
+        if "WZFIX release on error" not in tl3:
+            for _sig in (
+                "    async def on_download_error(self, error, button=None, is_limit=False):\n        async with task_dict_lock:",
+                "    async def on_upload_error(self, error):\n        async with task_dict_lock:",
+            ):
+                if _sig in tl3:
+                    _def_line = _sig.split("\n", 1)[0] + "\n"
+                    _rest = _sig.split("\n", 1)[1]
+                    _rel = (
+                        "        try:  # WZFIX release on error\n"
+                        "            from ..wzfix.r1_core import release_reserve\n"
+                        "            await release_reserve(self)\n"
+                        "        except Exception:\n"
+                        "            pass\n"
+                    )
+                    tl3 = tl3.replace(_sig, _def_line + _rel + _rest, 1)
+                    n_rel += 1
+                else:
+                    log("  r1: release anchor not found: " + _sig.split("(")[0].strip(), "WARN")
+            if n_rel:
+                with open(tl_path, "w", encoding="utf-8") as f:
+                    f.write(tl3)
+                r = subprocess.run(
+                    [sys.executable, "-m", "py_compile", tl_path],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if r.returncode == 0:
+                    log(f"  r1: reservation release hooks patched ({n_rel}/2)")
+                else:
+                    log(f"  r1: release hooks FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r1: release hooks FAILED — {e}", "ERROR")
+
+    # I-4: register the new commands at the end of add_handlers()
+    hd_path = os.path.join(WZMLX_DIR, "bot/core/handlers.py")
+    try:
+        with open(hd_path, "r", encoding="utf-8") as f:
+            hd = f.read()
+        if "from ..modules.wzfix_admin import" not in hd:
+            hd += (
+                '\n    # WZFIX Round 1 (v15.7) — quota, library, db tools\n'
+                '    from ..modules.wzfix_admin import (\n'
+                '        wzfix_find,\n'
+                '        wzfix_usage,\n'
+                '        wzfix_qusers,\n'
+                '        wzfix_setcap,\n'
+                '        wzfix_addcap,\n'
+                '        wzfix_deductcap,\n'
+                '        wzfix_deluser,\n'
+                '        wzfix_resetcap,\n'
+                '        wzfix_botcap,\n'
+                '        wzfix_dbstats,\n'
+                '        wzfix_dbclean,\n'
+                '        wzfix_diag,\n'
+                '        wzfix_clean_cb,\n'
+                '        wzfix_cancel_cb,\n'
+                '        wzfix_adminpass,\n'
+                '        wzfix_allow,\n'
+                '        wzfix_bans,\n'
+                '        wzfix_lockdash,\n'
+                '    )\n'
+                '    TgClient.bot.add_handler(\n'
+                '        MessageHandler(\n'
+                '            wzfix_find,\n'
+                '            filters=command("find", case_sensitive=True)\n'
+                '            & CustomFilters.authorized,\n'
+                '        )\n'
+                '    )\n'
+                '    TgClient.bot.add_handler(\n'
+                '        MessageHandler(\n'
+                '            wzfix_usage,\n'
+                '            filters=command("usage", case_sensitive=True)\n'
+                '            & CustomFilters.authorized,\n'
+                '        )\n'
+                '    )\n'
+                '    for _fn, _cmd in (\n'
+                '        (wzfix_qusers, "qusers"),\n'
+                '        (wzfix_setcap, "setcap"),\n'
+                '        (wzfix_addcap, "addcap"),\n'
+                '        (wzfix_deductcap, "deductcap"),\n'
+                '        (wzfix_deluser, "deluser"),\n'
+                '        (wzfix_resetcap, "resetcap"),\n'
+                '        (wzfix_botcap, "botcap"),\n'
+                '        (wzfix_dbstats, "dbstats"),\n'
+                '        (wzfix_dbclean, "dbclean"),\n'
+                '        (wzfix_diag, "wzfixdiag"),\n'
+                '        (wzfix_adminpass, "adminpass"),\n'
+                '        (wzfix_allow, "allow"),\n'
+                '        (wzfix_bans, "bans"),\n'
+                '        (wzfix_lockdash, "lockdash"),\n'
+                '    ):\n'
+                '        TgClient.bot.add_handler(\n'
+                '            MessageHandler(\n'
+                '                _fn, filters=command(_cmd, case_sensitive=True) & CustomFilters.sudo\n'
+                '            )\n'
+                '        )\n'
+                '    TgClient.bot.add_handler(\n'
+                '        CallbackQueryHandler(wzfix_clean_cb, filters=regex("^wzfixclean$"))\n'
+                '    )\n'
+                '    TgClient.bot.add_handler(\n'
+                '        CallbackQueryHandler(wzfix_cancel_cb, filters=regex("^wzfixcancel$"))\n'
+                '    )\n'
+            )
+            with open(hd_path, "w", encoding="utf-8") as f:
+                f.write(hd)
+            r = subprocess.run(
+                [sys.executable, "-m", "py_compile", hd_path],
+                capture_output=True, text=True, timeout=60,
+            )
+            if r.returncode == 0:
+                log("  r1: commands registered (find usage qusers setcap addcap deductcap deluser resetcap botcap dbstats dbclean wzfixdiag adminpass allow bans lockdash)")
+            else:
+                log(f"  r1: handlers FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r1: handlers patch FAILED — {e}", "ERROR")
+
+    # I-5: compile-check the new modules themselves
+    try:
+        for _p in ("bot/helper/wzfix/r1_core.py", "bot/modules/wzfix_admin.py"):
+            _fp = os.path.join(WZMLX_DIR, _p)
+            r = subprocess.run(
+                [sys.executable, "-m", "py_compile", _fp],
+                capture_output=True, text=True, timeout=60,
+            )
+            if r.returncode != 0:
+                log(f"  r1: {_p} FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r1: module compile check FAILED — {e}", "ERROR")
+
+    # Kaggle addition J — v15.8 Round 2 Phase A: owner web dashboard
+    # (served at /wzadmin from the bot's own stream server, so it reads
+    # task_dict + DB directly) + wserver /wzadmin proxy + heartbeat watchdog
+    # (alerts LOG_CHAT if the bot stops answering /_ping for 30+ minutes).
+    try:
+        _r2 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r2_web.py")
+        with open(_r2, "w", encoding="utf-8") as f:
+            f.write(base64.b64decode(WZFIX_WEB_B64).decode("utf-8"))
+        r = subprocess.run(
+            [sys.executable, "-m", "py_compile", _r2],
+            capture_output=True, text=True, timeout=60,
+        )
+        if r.returncode == 0:
+            log("  r2: r2_web.py written (dashboard, reports, kill buttons)")
+        else:
+            log(f"  r2: r2_web.py FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
+    except Exception as e:
+        log(f"  r2: r2_web.py FAILED — {e}", "ERROR")
+
+    # Kaggle addition O — v15.67 Round 9: dashboard reliability fixes
     # (login form always visible — no more black page, connection banner
     # with auto-retry, no-flicker section updates, history diff,
     # no-store headers) + stream auth loop-breaker with diagnostics +
@@ -4684,311 +4988,6 @@ async def _wzfix_record_start(message):
                 log(f"  r9: wserver FAILED compile — {(_r.stderr or '').strip()[:200]}", "ERROR")
     except Exception as e:
         log(f"  r9: wserver patch FAILED — {e}", "ERROR")
-
-
-    # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
-    # library, owner cap commands, and DB stats/cleanup.
-    # Two new self-contained modules are written into the tree; three small
-    # hooks wire them into the task pipeline. Everything fails open: a quota
-    # error must never block a download.
-    try:
-        wzfix_dir = os.path.join(WZMLX_DIR, "bot/helper/wzfix")
-        os.makedirs(wzfix_dir, exist_ok=True)
-        with open(os.path.join(wzfix_dir, "__init__.py"), "w", encoding="utf-8") as f:
-            f.write("")
-        with open(os.path.join(wzfix_dir, "r1_core.py"), "w", encoding="utf-8") as f:
-            f.write(base64.b64decode(WZFIX_R1_CORE_B64).decode("utf-8"))
-        with open(os.path.join(WZMLX_DIR, "bot/modules/wzfix_admin.py"), "w", encoding="utf-8") as f:
-            f.write(base64.b64decode(WZFIX_ADMIN_B64).decode("utf-8"))
-        with open(os.path.join(wzfix_dir, "r3_music.py"), "w", encoding="utf-8") as f:
-            f.write(base64.b64decode(WZFIX_R3_MUSIC_B64).decode("utf-8"))
-        with open(os.path.join(wzfix_dir, "r4_music_cmds.py"), "w", encoding="utf-8") as f:
-            f.write(base64.b64decode(WZFIX_R4_CMDS_B64).decode("utf-8"))
-        log("  r1: wrote r1_core + r3_music + r4_music_cmds + wzfix_admin")
-
-        with open(
-            os.path.join(WZMLX_DIR, "bot/helper/wzfix/versions.py"),
-            "w",
-            encoding="utf-8",
-        ) as f:
-            f.write(
-                'WZFIX_BUILD = "v15.66"\n'
-                'WZFIX_DATE = "23 Sep 2026 (IST)"\n'
-                'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
-            )
-        log("  r1: versions.py written (v15.66 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.66 running")
-    except Exception as e:
-        log(f"  r1: module write FAILED — {e}", "ERROR")
-
-    # I-2: quota enforcement — limit_checker (size-aware) + pre_task_check
-    tm_path = os.path.join(WZMLX_DIR, "bot/helper/ext_utils/task_manager.py")
-    try:
-        with open(tm_path, "r", encoding="utf-8") as f:
-            tm = f.read()
-        n_tm = 0
-        if "WZFIX quota check error" not in tm:
-            old_lc = (
-                '    if limit_exceeded:\n'
-                '        return limit_exceeded + f"\\n┖ <b>Task By</b> → {listener.tag}"'
-            )
-            new_lc = (
-                '    if not limit_exceeded:\n'
-                '        try:\n'
-                '            from ..wzfix.r1_core import quota_check\n'
-                '            _qmsg = await quota_check(listener)\n'
-                '            if _qmsg:\n'
-                '                limit_exceeded = _qmsg\n'
-                '        except Exception as _qe:\n'
-                '            LOGGER.error(f"WZFIX quota check error: {_qe}")\n\n'
-            ) + old_lc
-            if old_lc in tm:
-                tm = tm.replace(old_lc, new_lc, 1)
-                n_tm += 1
-            else:
-                log("  r1: limit_checker anchor not found", "WARN")
-        if "WZFIX pre-download allowance check" not in tm:
-            old_pt = (
-                '    if Config.RSS_CHAT and user_id == int(Config.RSS_CHAT):\n'
-                '        return None, None'
-            )
-            new_pt = (
-                '    try:  # WZFIX pre-download allowance check (v15.9)\n'
-                '        from ..wzfix.r1_core import precheck, over_limit_msg\n'
-                '        _qmsg = await precheck(message)\n'
-                '        if _qmsg == "__WZFIX_HANDLED__":\n'
-                '            # v15.27: precheck already replied in-place (the\n'
-                '            # checking message was EDITED into the block\n'
-                '            # message) — abort the task, send nothing more\n'
-                '            return "__WZFIX_HANDLED__", None\n'
-                '        if not _qmsg and not getattr(message, "_wzfix_held", False):\n'
-                '            _qmsg = await over_limit_msg(user_id, user_dict)\n'
-                '            if _qmsg:\n'
-                '                # v15.28: over-quota without a pre-checkable\n'
-                '                # link gets the ONE clean message + an admin\n'
-                '                # log entry, not a wrapped Task-Checks card\n'
-                '                from ..wzfix.r1_core import over_limit_reply\n'
-                '                _qmsg = await over_limit_reply(message, user_id, _qmsg)\n'
-                '                if _qmsg == "__WZFIX_HANDLED__":\n'
-                '                    return "__WZFIX_HANDLED__", None\n'
-                '        if _qmsg:\n'
-                '            msg.append(_qmsg)\n'
-                '    except Exception as _wz_e:\n'
-                '        LOGGER.error(f"WZFIX pre-check failed (allowed): {_wz_e}")\n'
-                '        pass\n\n'
-            ) + old_pt
-            if old_pt in tm:
-                tm = tm.replace(old_pt, new_pt, 1)
-                n_tm += 1
-            else:
-                log("  r1: pre_task_check anchor not found", "WARN")
-        if n_tm:
-            with open(tm_path, "w", encoding="utf-8") as f:
-                f.write(tm)
-            r = subprocess.run(
-                [sys.executable, "-m", "py_compile", tm_path],
-                capture_output=True, text=True, timeout=60,
-            )
-            if r.returncode == 0:
-                log(f"  r1: task_manager patched ({n_tm}/2 hooks)")
-            else:
-                log(f"  r1: task_manager FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
-    except Exception as e:
-        log(f"  r1: task_manager patch FAILED — {e}", "ERROR")
-
-    # I-3: record finished tasks (charge quota + library index)
-    tl_path = os.path.join(WZMLX_DIR, "bot/helper/listeners/task_listener.py")
-    try:
-        with open(tl_path, "r", encoding="utf-8") as f:
-            tl = f.read()
-        if "WZFIX record failed" not in tl:
-            old_oc = (
-                '    async def on_upload_complete(\n'
-                '        self, link, files, folders, mime_type, rclone_path="", dir_id=""\n'
-                '    ):\n'
-                '        if ('
-            )
-            new_oc = (
-                '    async def on_upload_complete(\n'
-                '        self, link, files, folders, mime_type, rclone_path="", dir_id=""\n'
-                '    ):\n'
-                '        try:\n'
-                '            from ..wzfix.r1_core import record_task\n'
-                '            await record_task(self, link, files, mime_type, rclone_path, dir_id)\n'
-                '        except Exception as _we:\n'
-                '            LOGGER.error(f"WZFIX record failed: {_we}")\n'
-                '        if ('
-            )
-            if old_oc in tl:
-                tl = tl.replace(old_oc, new_oc, 1)
-                with open(tl_path, "w", encoding="utf-8") as f:
-                    f.write(tl)
-                r = subprocess.run(
-                    [sys.executable, "-m", "py_compile", tl_path],
-                    capture_output=True, text=True, timeout=60,
-                )
-                if r.returncode == 0:
-                    log("  r1: task_listener patched (1 hook)")
-                else:
-                    log(f"  r1: task_listener FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
-            else:
-                log("  r1: on_upload_complete anchor not found", "WARN")
-    except Exception as e:
-        log(f"  r1: task_listener patch FAILED — {e}", "ERROR")
-
-    # I-3b: reservations — free a task's bandwidth hold when it fails or is
-    # cancelled (completion releases it from record_task itself)
-    try:
-        with open(tl_path, "r", encoding="utf-8") as f:
-            tl3 = f.read()
-        n_rel = 0
-        if "WZFIX release on error" not in tl3:
-            for _sig in (
-                "    async def on_download_error(self, error, button=None, is_limit=False):\n        async with task_dict_lock:",
-                "    async def on_upload_error(self, error):\n        async with task_dict_lock:",
-            ):
-                if _sig in tl3:
-                    _def_line = _sig.split("\n", 1)[0] + "\n"
-                    _rest = _sig.split("\n", 1)[1]
-                    _rel = (
-                        "        try:  # WZFIX release on error\n"
-                        "            from ..wzfix.r1_core import release_reserve\n"
-                        "            await release_reserve(self)\n"
-                        "        except Exception:\n"
-                        "            pass\n"
-                    )
-                    tl3 = tl3.replace(_sig, _def_line + _rel + _rest, 1)
-                    n_rel += 1
-                else:
-                    log("  r1: release anchor not found: " + _sig.split("(")[0].strip(), "WARN")
-            if n_rel:
-                with open(tl_path, "w", encoding="utf-8") as f:
-                    f.write(tl3)
-                r = subprocess.run(
-                    [sys.executable, "-m", "py_compile", tl_path],
-                    capture_output=True, text=True, timeout=60,
-                )
-                if r.returncode == 0:
-                    log(f"  r1: reservation release hooks patched ({n_rel}/2)")
-                else:
-                    log(f"  r1: release hooks FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
-    except Exception as e:
-        log(f"  r1: release hooks FAILED — {e}", "ERROR")
-
-    # I-4: register the new commands at the end of add_handlers()
-    hd_path = os.path.join(WZMLX_DIR, "bot/core/handlers.py")
-    try:
-        with open(hd_path, "r", encoding="utf-8") as f:
-            hd = f.read()
-        if "from ..modules.wzfix_admin import" not in hd:
-            hd += (
-                '\n    # WZFIX Round 1 (v15.7) — quota, library, db tools\n'
-                '    from ..modules.wzfix_admin import (\n'
-                '        wzfix_find,\n'
-                '        wzfix_usage,\n'
-                '        wzfix_qusers,\n'
-                '        wzfix_setcap,\n'
-                '        wzfix_addcap,\n'
-                '        wzfix_deductcap,\n'
-                '        wzfix_deluser,\n'
-                '        wzfix_resetcap,\n'
-                '        wzfix_botcap,\n'
-                '        wzfix_dbstats,\n'
-                '        wzfix_dbclean,\n'
-                '        wzfix_diag,\n'
-                '        wzfix_clean_cb,\n'
-                '        wzfix_cancel_cb,\n'
-                '        wzfix_adminpass,\n'
-                '        wzfix_allow,\n'
-                '        wzfix_bans,\n'
-                '        wzfix_lockdash,\n'
-                '    )\n'
-                '    TgClient.bot.add_handler(\n'
-                '        MessageHandler(\n'
-                '            wzfix_find,\n'
-                '            filters=command("find", case_sensitive=True)\n'
-                '            & CustomFilters.authorized,\n'
-                '        )\n'
-                '    )\n'
-                '    TgClient.bot.add_handler(\n'
-                '        MessageHandler(\n'
-                '            wzfix_usage,\n'
-                '            filters=command("usage", case_sensitive=True)\n'
-                '            & CustomFilters.authorized,\n'
-                '        )\n'
-                '    )\n'
-                '    for _fn, _cmd in (\n'
-                '        (wzfix_qusers, "qusers"),\n'
-                '        (wzfix_setcap, "setcap"),\n'
-                '        (wzfix_addcap, "addcap"),\n'
-                '        (wzfix_deductcap, "deductcap"),\n'
-                '        (wzfix_deluser, "deluser"),\n'
-                '        (wzfix_resetcap, "resetcap"),\n'
-                '        (wzfix_botcap, "botcap"),\n'
-                '        (wzfix_dbstats, "dbstats"),\n'
-                '        (wzfix_dbclean, "dbclean"),\n'
-                '        (wzfix_diag, "wzfixdiag"),\n'
-                '        (wzfix_adminpass, "adminpass"),\n'
-                '        (wzfix_allow, "allow"),\n'
-                '        (wzfix_bans, "bans"),\n'
-                '        (wzfix_lockdash, "lockdash"),\n'
-                '    ):\n'
-                '        TgClient.bot.add_handler(\n'
-                '            MessageHandler(\n'
-                '                _fn, filters=command(_cmd, case_sensitive=True) & CustomFilters.sudo\n'
-                '            )\n'
-                '        )\n'
-                '    TgClient.bot.add_handler(\n'
-                '        CallbackQueryHandler(wzfix_clean_cb, filters=regex("^wzfixclean$"))\n'
-                '    )\n'
-                '    TgClient.bot.add_handler(\n'
-                '        CallbackQueryHandler(wzfix_cancel_cb, filters=regex("^wzfixcancel$"))\n'
-                '    )\n'
-            )
-            with open(hd_path, "w", encoding="utf-8") as f:
-                f.write(hd)
-            r = subprocess.run(
-                [sys.executable, "-m", "py_compile", hd_path],
-                capture_output=True, text=True, timeout=60,
-            )
-            if r.returncode == 0:
-                log("  r1: commands registered (find usage qusers setcap addcap deductcap deluser resetcap botcap dbstats dbclean wzfixdiag adminpass allow bans lockdash)")
-            else:
-                log(f"  r1: handlers FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
-    except Exception as e:
-        log(f"  r1: handlers patch FAILED — {e}", "ERROR")
-
-    # I-5: compile-check the new modules themselves
-    try:
-        for _p in ("bot/helper/wzfix/r1_core.py", "bot/modules/wzfix_admin.py"):
-            _fp = os.path.join(WZMLX_DIR, _p)
-            r = subprocess.run(
-                [sys.executable, "-m", "py_compile", _fp],
-                capture_output=True, text=True, timeout=60,
-            )
-            if r.returncode != 0:
-                log(f"  r1: {_p} FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
-    except Exception as e:
-        log(f"  r1: module compile check FAILED — {e}", "ERROR")
-
-    # Kaggle addition J — v15.8 Round 2 Phase A: owner web dashboard
-    # (served at /wzadmin from the bot's own stream server, so it reads
-    # task_dict + DB directly) + wserver /wzadmin proxy + heartbeat watchdog
-    # (alerts LOG_CHAT if the bot stops answering /_ping for 30+ minutes).
-    try:
-        _r2 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r2_web.py")
-        with open(_r2, "w", encoding="utf-8") as f:
-            f.write(base64.b64decode(WZFIX_WEB_B64).decode("utf-8"))
-        r = subprocess.run(
-            [sys.executable, "-m", "py_compile", _r2],
-            capture_output=True, text=True, timeout=60,
-        )
-        if r.returncode == 0:
-            log("  r2: r2_web.py written (dashboard, reports, kill buttons)")
-        else:
-            log(f"  r2: r2_web.py FAILED compile — {(r.stderr or '').strip()[:200]}", "ERROR")
-    except Exception as e:
-        log(f"  r2: r2_web.py FAILED — {e}", "ERROR")
 
     # J-1: register /wzadmin routes on the bot stream server (in-process)
     try:
@@ -6686,7 +6685,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.66) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.67) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -6701,7 +6700,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.66): the hyper"
+                "            # WZFIX music keep-chat (v15.67): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
