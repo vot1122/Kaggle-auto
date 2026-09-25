@@ -3,7 +3,7 @@
 - ✅ **login with admin pass** — 200 cookie=yes
 - ✅ **state (all sections)** — 200 keys=['ok', 'access', 'day', 'bot', 'users', 'tasks', 'global_cap_gb', 'global_music', 'music_settings', 'totals']
 - ✅ **state has users** — 3 user(s)
-- ✅ **state totals** — {'used': 343932054, 'reserved': 0, 'users': 3, 'tasks': 0}
+- ✅ **state totals** — {'used': 0, 'reserved': 0, 'users': 3, 'tasks': 0}
 - ✅ **user history** — 200 items=25
 - ✅ **action botcap (no-op)** — default cap → 15 GB
 - ✅ **action gmusic (no-op)** — default music limit → 10 songs
@@ -23,7 +23,8 @@
 - ✅ **streampass: after del, link falls back to global** — 401 'error': 'wrong password'} (info)
 - ✅ **loop-fix: real gated link probe (info)** — 404 — link or its password no longer present
 - ✅ **loop-fix: stream page serves the v15.65 fixes** — 200 jsfix=yes urlfix=yes
+- ❌ **dashboard page is v15.66 (r9 applied)** — 200 connBar=no login-hidden=yes len=20496
 - ✅ **logout** — 200
 - ✅ **old token after logout (stateless — info)** — 200 — token stays valid until expiry (by design)
 
-**23/25 passed**
+**23/26 passed**
