@@ -1,7 +1,8 @@
 name: Deploy WZFIX Version
 
-# One-shot: applies tools patch to kaggle_notebook.py, commits it, then
-# pushes the notebook to Kaggle (new version = fresh session).
+# One-shot: fetches the notebook from the Google Drive link (if set),
+# applies the tools patch, commits it, then pushes the notebook to
+# Kaggle (new version = fresh session).
 on:
   workflow_dispatch:
 
@@ -18,6 +19,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Fetch notebook from Google Drive link
+        run: |
+          if [ -f wzfix_deploy/notebook_gdrive.txt ]; then
+            URL=$(grep -o 'https://[^ ]*' wzfix_deploy/notebook_gdrive.txt | head -1)
+            if [ -n "$URL" ]; then
+              echo "fetching $URL"
+              curl -sL "$URL" -o kaggle_notebook.py
+              SZ=$(stat -c%s kaggle_notebook.py)
+              if [ "$SZ" -lt 500000 ] || ! grep -q "Kaggle addition O" kaggle_notebook.py; then
+                echo "Drive download failed or invalid (size=$SZ) — keeping repo notebook"
+                git checkout -- kaggle_notebook.py
+              else
+                echo "notebook fetched from Google Drive ($SZ bytes)"
+              fi
+            fi
+          else
+            echo "no gdrive link file — using repo notebook"
+          fi
 
       - name: Apply patch
         run: python deploy_patch.py
