@@ -23,7 +23,7 @@ import sys
 
 INPUT_SHA256 = "b8088ad7704429e3477c8ebd856e5322a059fcd2cb3d48626d22b78c908b1115"
 R3_IN_SHA256 = "fc7400e8eaa6e53a19a1e087a6647935500555c123ae47e5802d2d785b67668b"
-EXPECT_SHA256 = "ca83da5d170a694361752ca6bd0741f273e8b02b89f56d92a0bb785c2384c404"
+EXPECT_SHA256 = "9ae9394dea8fc729737951496307b1886884626886b38dba88c58e6eb8e288ca"
 
 s = open("kaggle_notebook.py", encoding="utf-8").read()
 if "v15.73" in s:
@@ -306,7 +306,7 @@ new_block = 'WZFIX_R3_MUSIC_B64 = (\n' + "".join(
 s = s[: m.start()] + new_block + s[m.end() :]
 
 # ── insert addition J-31 (silent cmd-message fallback) ────────────────
-J31 = '''    # J-31: silent cmd-message fallback (v15.73) — the uploader's
+J31 = r'''    # J-31: silent cmd-message fallback (v15.73) — the uploader's
     # "Deleted Cmd Message! Don't delete the cmd message again!" warning
     # fires for EVERY fan-out clone (clones carry fake message ids the
     # chat never had), so artist batches spam it. Fall back silently to
@@ -320,46 +320,27 @@ J31 = '''    # J-31: silent cmd-message fallback (v15.73) — the uploader's
         with open(_p31, "r", encoding="utf-8") as f:
             _t31 = f.read()
         if "WZFIX r14 silent cmd fallback" not in _t31:
-            _old31 = (
-                "            if self._sent_msg is None or "
-                "self._sent_msg.chat is None:\\n"
-                "                try:\\n"
-                "                    self._sent_msg = await "
-                "_call_with_flood_retry(\\n"
-                "                        self._listener.client.send_message,"
-                "\\n"
-                "                        chat_id="
-                "self._listener.message.chat.id,\\n"
-                "                        text=\"Deleted Cmd Message! "
-                "Don't delete the cmd message again!\\",\\n"
-                "                        disable_web_page_preview=True,"
-                "\\n"
-                "                        disable_notification=True,\\n"
-                "                    )\\n"
-                "                except Exception:\\n"
-                "                    self._sent_msg = "
-                "self._listener.message"
-            )
-            _new31 = (
-                "            if self._sent_msg is None or "
-                "self._sent_msg.chat is None:\\n"
-                "                # WZFIX r14 silent cmd fallback (v15.73):"
-                " fan-out\\n"
-                "                # clones carry fake message ids, so this "
-                "lookup\\n"
-                "                # always fails — reply to the original "
-                "command\\n"
-                "                # message instead of spamming the chat "
-                "with a\\n"
-                "                # \"Deleted Cmd Message!\" warning\\n"
-                "                LOGGER.info(\\n"
-                "                    \"WZFIX r14: upload replies to the "
-                "original \\"\\n"
-                "                    \"cmd message (clone/deleted cmd)\""
-                "\\n"
-                "                )\\n"
-                "                self._sent_msg = self._listener.message"
-            )
+            _old31 = r"""            if self._sent_msg is None or self._sent_msg.chat is None:
+                try:
+                    self._sent_msg = await _call_with_flood_retry(
+                        self._listener.client.send_message,
+                        chat_id=self._listener.message.chat.id,
+                        text="Deleted Cmd Message! Don't delete the cmd message again!",
+                        disable_web_page_preview=True,
+                        disable_notification=True,
+                    )
+                except Exception:
+                    self._sent_msg = self._listener.message"""
+            _new31 = r"""            if self._sent_msg is None or self._sent_msg.chat is None:
+                # WZFIX r14 silent cmd fallback: fan-out clones carry
+                # fake message ids, so this lookup always fails — reply
+                # to the original command message instead of spamming
+                # the chat with a "Deleted Cmd Message!" warning
+                LOGGER.info(
+                    "WZFIX r14: upload replies to the original "
+                    "cmd message (clone/deleted cmd)"
+                )
+                self._sent_msg = self._listener.message"""
             if _old31 in _t31:
                 _t31 = _t31.replace(_old31, _new31, 1)
                 with open(_p31, "w", encoding="utf-8") as f:
