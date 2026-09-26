@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c7 (v15.83.7).
+"""One-shot patch loader: R25c8 (v15.83.8).
 
 The real payload is served from Drive (uploaded byte-exact, no
 hand-copying); this downloads it, verifies its sha256, and runs it.
 
-R25c7: flood-aware sendAudio (429 retry + stagger/pace), playlist
-import fix, leader slice on the worker path (no task-detail
-messages between songs), sweep chat/token, catalog 429 retries.
+R25c8: catalog card with live per-song marks, ONE combined worker
+status via the Mongo status channel, unlimited workers (one per 6
+songs), whole-batch playlist, BUILD bumped to v15.83.8 everywhere
+so the stale v15.83 session retires itself.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1AeqwijdDA_nTeQ0wzvehAfXmsupKbuX4&export=download&confirm=t"
-EXPECT_SHA256 = "1d8ffa708c87b3837256f5853d86402205dad3f6bf811b661b0ca0068eead8ee"
+URL = "https://drive.usercontent.google.com/download?id=1-hSn8NCndRoMppEl7BwTIJavJNPSWiTR&export=download&confirm=t"
+EXPECT_SHA256 = "fe0b5c80baecc4e91e1af01708a8967e50f173b282bdb44c3fafece16f70ddc4"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
