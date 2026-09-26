@@ -12,7 +12,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
@@ -61,12 +61,51 @@ jobs:
           printf '{"username":"%s","key":"%s"}\n' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
 
+      - name: Capture current tunnel (pre-restart)
+        id: pretunnel
+        run: |
+          T=$(curl -sS -m 20 "https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev/health" 2>/dev/null | grep -o 'https://[-a-z0-9.]*trycloudflare.com' | head -1 || true)
+          echo "pre-restart tunnel: ${T:-none}"
+          echo "tnl=${T:-none}" >> $GITHUB_OUTPUT
+
       - name: Push notebook to Kaggle
         run: |
           ls
           kaggle kernels push -p .
 
-      - name: Kernel status
+      - name: Ensure the new version actually replaces the running bot
+        timeout-minutes: 25
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
-          sleep 45
-          kaggle kernels status "${{ secrets.KAGGLE_NOTEBOOK }}" || true
+          set +e
+          MAIN="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
+          NB="${{ secrets.KAGGLE_NOTEBOOK }}"
+          NBUSER="${NB%%/*}"
+          NBSLUG="${NB#*/}"
+          PREV_TNL="${{ steps.pretunnel.outputs.tnl }}"
+          REPUSHED=0
+          echo "previous tunnel: $PREV_TNL"
+          echo "(a push alone does not restart a running session; from v15.78 the"
+          echo " notebook exits itself when the repo build changes)"
+          for i in $(seq 1 60); do
+            H=$(curl -sS -m 20 "$MAIN/health" 2>/dev/null || echo '{}')
+            RESP=$(echo "$H" | grep -o '"bot_responding": *[a-z]*' | head -1 | grep -o 'true\|false' || echo '?')
+            TNL=$(echo "$H" | grep -o 'https://[-a-z0-9.]*trycloudflare.com' | head -1)
+            ST=$(curl -sS -m 20 -u "$KAGGLE_USERNAME:$KAGGLE_KEY" "https://www.kaggle.com/api/v1/kernels/status?user_name=$NBUSER&kernel_slug=$NBSLUG" 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+            echo "[$i] kaggle=$ST bot_responding=$RESP tunnel=${TNL:-none}"
+            if [ "$RESP" = "true" ] && [ -n "$TNL" ] && [ "$TNL" != "$PREV_TNL" ]; then
+              echo "NEW SESSION IS UP: $TNL"
+              exit 0
+            fi
+            if [ "$RESP" != "true" ] && [ "$ST" != "running" ] && [ -n "$ST" ]; then
+              if [ "$REPUSHED" -lt 2 ]; then
+                REPUSHED=$((REPUSHED+1))
+                echo "old session ended and nothing is running - re-pushing to start the new run"
+                kaggle kernels push -p . || true
+              fi
+            fi
+            sleep 20
+          done
+          echo "WARNING: could not confirm the new session came up (old session may still be running)"
