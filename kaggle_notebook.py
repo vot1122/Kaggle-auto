@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.75  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.76  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2257,7 +2257,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.75) — per-link stream passwords.
+# WZFIX Round 5 (v15.76) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -4169,7 +4169,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.75 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.76 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4343,7 +4343,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.75)\n'
+                '\n    # WZFIX r5 streampass (v15.76)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4368,7 +4368,7 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition R8 — v15.75: per-link pass user-gate fix (loop).
+    # Kaggle addition R8 — v15.76: per-link pass user-gate fix (loop).
     # The ?user=1 gates only accepted tokens signed with the GLOBAL
     # STREAM_PASS, so a link unlocked with its own per-link password
     # reloaded into the password prompt forever. Also, addition K's
@@ -4468,7 +4468,7 @@ def apply_userrepo_patches():
             _anchor = "# ─── owner command ─────────────────────────────────────────────────"
             _ins = (
                 "\n\nasync def link_token_ok(request):\n"
-                "    \"\"\"WZFIX Round 8 (v15.75): True only when THIS link has a custom\n"
+                "    \"\"\"WZFIX Round 8 (v15.76): True only when THIS link has a custom\n"
                 "    password AND the request's ?auth= token verifies against it.\n"
                 "\n"
                 "    Why: the ?user=1 gate in stream_server checks the token against\n"
@@ -4513,7 +4513,7 @@ def apply_userrepo_patches():
         log(f"  r8: r5_streampass FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.75 Round 6: /start user registry.
+    # Kaggle addition M — v15.76 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4585,7 +4585,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
-    # Kaggle addition N — v15.75 Round 6b: stream page auth-loop fix.
+    # Kaggle addition N — v15.76 Round 6b: stream page auth-loop fix.
     # The stream page sent its boot probe and the video/download src
     # WITHOUT the auth token for normal (non-user) links, so a correct
     # password just reloaded into the same 401 — an endless password
@@ -4678,7 +4678,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6b FAILED — {e}", "ERROR")
 
-    # R16 (v15.75): direct-download auth page. When a protected
+    # R16 (v15.76): direct-download auth page. When a protected
     # stream link is opened directly in a browser (the Telegram
     # download option, /dl/<token>?user=1), the password modal that
     # lives inside the player page never loads, so the user saw raw
@@ -4857,12 +4857,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.75"\n'
+                'WZFIX_BUILD = "v15.76"\n'
                 'WZFIX_DATE = "25 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.75 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.75 running")
+        log("  r1: versions.py written (v15.76 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.76 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -5089,7 +5089,7 @@ async def _wzfix_record_start(message):
                 '    TgClient.bot.add_handler(\n'
                 '        CallbackQueryHandler(wzfix_cancel_cb, filters=regex("^wzfixcancel$"))\n'
                 '    )\n'
-                '    # WZFIX r11 (v15.75): artist-batch playlist button\n'
+                '    # WZFIX r11 (v15.76): artist-batch playlist button\n'
                 '    from ..helper.wzfix.r3_music import wzfix_pl_go\n'
                 '    TgClient.bot.add_handler(\n'
                 '        CallbackQueryHandler(wzfix_pl_go, filters=regex("^wzfxpl:"))\n'
@@ -5140,7 +5140,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: r2_web.py FAILED — {e}", "ERROR")
 
-    # Kaggle addition O — v15.75 Round 9: dashboard reliability fixes
+    # Kaggle addition O — v15.76 Round 9: dashboard reliability fixes
     # (login form always visible — no more black page, connection banner
     # with auto-retry, no-flicker section updates, history diff,
     # no-store headers) + stream auth loop-breaker with diagnostics +
@@ -5525,7 +5525,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r9: wserver patch FAILED — {e}", "ERROR")
 
-    # J-31: silent cmd-message fallback (v15.75) — the uploader's
+    # J-31: silent cmd-message fallback (v15.76) — the uploader's
     # "Deleted Cmd Message! Don't delete the cmd message again!" warning
     # fires for EVERY fan-out clone (clones carry fake message ids the
     # chat never had), so artist batches spam it. Fall back silently to
@@ -5585,7 +5585,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-31 patch FAILED — {e}", "ERROR")
 
-    # J-32: deterministic fan-out merge (v15.75) — artist-batch clones
+    # J-32: deterministic fan-out merge (v15.76) — artist-batch clones
     # move their song into the leader's folder and finish quietly;
     # only the task that finishes last uploads, so every song reaches
     # the chat exactly once (this replaces the fragile upstream
@@ -5669,7 +5669,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-32 patch FAILED — {e}", "ERROR")
 
-    # J-33: single-copy DM (v15.75) — with BOT_PM on and the batch
+    # J-33: single-copy DM (v15.76) — with BOT_PM on and the batch
     # running in the user's DM, every song was sent to the DM twice
     # (upload reply + PM copy). Music batches keep just the reply.
     try:
@@ -5720,7 +5720,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-33 patch FAILED — {e}", "ERROR")
 
-    # J-34: m4a passthrough (v15.75) — every song was transcoded to
+    # J-34: m4a passthrough (v15.76) — every song was transcoded to
     # mp3 (aac -> mp3 re-encode: CPU-bound and quality-losing). Music
     # now downloads YouTube's native m4a audio and copies it into the
     # container (no transcode): faster, lighter and better quality.
@@ -7111,7 +7111,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-23 patch FAILED — {e}", "ERROR")
 
-    # J-30: quiet music fan-out (v15.75) — artist batches keep the chat
+    # J-30: quiet music fan-out (v15.76) — artist batches keep the chat
     # clean: no per-song "Downloaded! Waiting..." or per-song error
     # messages (the artist note tracks progress), a compact file list
     # with one line per song, and the uploaded songs collected for the
@@ -7127,7 +7127,7 @@ async def _wzfix_record_start(message):
                 '        await send_message(self.message, '
                 'f"{self.tag} {escape(str(error))}")'
             )
-            _new30a = r'''        # WZFIX r11 quiet fan-out (v15.75): artist batches track
+            _new30a = r'''        # WZFIX r11 quiet fan-out (v15.76): artist batches track
         # progress in one note — no per-song messages
         _wzfix_quiet = False
         try:
@@ -7145,7 +7145,7 @@ async def _wzfix_record_start(message):
             _old30b = (
                 '        await send_message(self.message, msg, button)'
             )
-            _new30b = r'''        # WZFIX r11 quiet fan-out (v15.75): failed songs are
+            _new30b = r'''        # WZFIX r11 quiet fan-out (v15.76): failed songs are
         # folded into the artist note
         _wzfix_quiet = False
         try:
@@ -7171,7 +7171,7 @@ async def _wzfix_record_start(message):
         if not _wzfix_quiet:
             await send_message(self.message, msg, button)'''
             _old30c = "                    if Config.MEDIA_STORE and ("
-            _new30c = r'''                    # WZFIX r11 quiet fan-out (v15.75): one compact
+            _new30c = r'''                    # WZFIX r11 quiet fan-out (v15.76): one compact
                     # line per song, and every uploaded song recorded
                     # for the playlist prompt
                     try:
@@ -7610,7 +7610,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.75) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.76) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -7625,7 +7625,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.75): the hyper"
+                "            # WZFIX music keep-chat (v15.76): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
@@ -7829,6 +7829,260 @@ async def _wzfix_record_start(message):
             log("  r2: direct_link_generator already compatible")
     except Exception as e:
         log(f"  r2: direct_link_generator patch FAILED — {e}", "ERROR")
+    # R17 (v15.76): three fixes reported after R16 — the download
+    # password page never showed (wserver's /dl/ proxy strips the
+    # Accept header, so the gate now keys on the download kind; the
+    # page also posted to the internal-only /_auth and now uses the
+    # public /api/stream_auth route), the playlist card never
+    # appeared (the watcher gave up after 2 minutes while the single
+    # leader upload takes much longer — now 30 minutes), and the log
+    # channel flooded with one exempt message per song (admin notes
+    # are now aggregated into one message per burst of tasks).
+    try:
+        _nl17 = chr(10)
+        _nph17 = chr(37) + chr(78) + chr(37)
+        _kph17 = chr(37) + chr(75) + chr(37)
+        _bs17 = chr(92) + "n"
+        _bk17 = chr(92) + "U0001F451"
+        _ss17 = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+        with open(_ss17, "r", encoding="utf-8") as _f:
+            _s17 = _f.read()
+        if "WZFIX_R17" in _s17:
+            log("  r17: download page gate already present")
+        else:
+            _g17o = (
+                '        if "text/html" in (request.headers.get("Accept") or ""):\n'
+                '            return _dl_auth_page()\n'
+            ).replace(_nph17, _bs17).replace(_kph17, _bk17)
+            _g17n = (
+                '        # WZFIX_R17: the public /dl/ route is proxied by wserver\n'
+                '        # with a fresh header set - Accept never reaches here, so\n'
+                '        # key on the download kind instead. Player fetches use the\n'
+                '        # playback kind and keep the raw 401 that drives the\n'
+                '        # in-page password modal.\n'
+                '        if kind == "download":\n'
+                '            return _dl_auth_page()\n'
+            ).replace(_nph17, _bs17)
+            _ok17 = 0
+            if _g17o in _s17:
+                _s17 = _s17.replace(_g17o, _g17n, 1)
+                _ok17 += 1
+            else:
+                log("  r17: gate anchor missing", "WARN")
+            _fa17 = "await fetch(" + chr(34) + "/_auth" + chr(34)
+            _fb17 = "await fetch(" + chr(34) + "/api/stream_auth" + chr(34)
+            if _fa17 in _s17:
+                _s17 = _s17.replace(_fa17, _fb17, 1)
+                _ok17 += 1
+            else:
+                log("  r17: page auth route already public", "WARN")
+            if _ok17 == 2:
+                with open(_ss17, "w", encoding="utf-8") as _f:
+                    _f.write(_s17)
+                _r17 = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _ss17],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if _r17.returncode == 0:
+                    log("  r17: download page gate fixed (kind + public auth)")
+                else:
+                    log("  r17: stream_server compile FAILED", "ERROR")
+            else:
+                log("  r17: stream_server edits incomplete - not written", "WARN")
+        _r3p17 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r3_music.py")
+        with open(_r3p17, "r", encoding="utf-8") as _f:
+            _r317 = _f.read()
+        if "WZFIX_R17" in _r317:
+            log("  r17: playlist wait already extended")
+        else:
+            _w17o = (
+                '                        _pl_items = None\n'
+                '                        for _retry in range(6):\n'
+                '                            _pl_items = _wz.get("pl") or []\n'
+                '                            if _pl_items:\n'
+                '                                break\n'
+                '                            _log(\n'
+                '                                "WZFIX r15: playlist empty — retry "\n'
+                '                                f"{_retry + 1}/6 (waiting 20s)"\n'
+                '                            )\n'
+                '                            await asyncio.sleep(20)\n'
+                '                            _wz = (\n'
+                '                                _shared[f"/{_folder}"].get("_wzfix") or {}\n'
+                '                            )\n'
+            ).replace(_nph17, _bs17)
+            _w17n = (
+                '                        _pl_items = None\n'
+                '                        # WZFIX_R17: the leader uploads the whole\n'
+                '                        # batch in ONE task and that takes far longer\n'
+                '                        # than 2 minutes - poll for up to 30 minutes\n'
+                '                        for _retry in range(60):\n'
+                '                            _wz = (\n'
+                '                                _shared[f"/{_folder}"].get("_wzfix") or {}\n'
+                '                            )\n'
+                '                            _pl_items = _wz.get("pl") or []\n'
+                '                            if _pl_items:\n'
+                '                                break\n'
+                '                            if _retry % 5 == 0:\n'
+                '                                _log(\n'
+                '                                    "WZFIX r17: playlist still empty — "\n'
+                '                                    f"retry {_retry + 1}/60 (waiting 30s)"\n'
+                '                                )\n'
+                '                            await asyncio.sleep(30)\n'
+            ).replace(_nph17, _bs17)
+            if _w17o in _r317:
+                _r317 = _r317.replace(_w17o, _w17n, 1)
+                with open(_r3p17, "w", encoding="utf-8") as _f:
+                    _f.write(_r317)
+                _r17 = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _r3p17],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if _r17.returncode == 0:
+                    log("  r17: playlist wait extended (30 min)")
+                else:
+                    log("  r17: r3_music compile FAILED", "ERROR")
+            else:
+                log("  r17: watcher anchor missing", "WARN")
+        _tm17 = os.path.join(WZMLX_DIR, "bot/helper/ext_utils/task_manager.py")
+        with open(_tm17, "r", encoding="utf-8") as _f:
+            _t17 = _f.read()
+        if "agg_note(" in _t17:
+            log("  r17: exempt notes already aggregated")
+        else:
+            _t17o = (
+                '            await admin_log(\n'
+                '                "%K% <b>Exempt task — no quota check</b>",\n'
+                '                f"┏ <b>User</b> → {_who}%N%"\n'
+                '                f"┠ <b>Where</b> → {_ct} {_cn[:60]}%N%"\n'
+                '                f"┖ Owner/sudo are exempt by design",\n'
+                '            )\n'
+            ).replace(_nph17, _bs17).replace(_kph17, _bk17)
+            _t17n = (
+                '            from ..wzfix.r1_core import agg_note\n'
+                '\n'
+                '            _nl17 = chr(10)\n'
+                '            await agg_note(\n'
+                '                f"exempt:{_fu.id if _fu else 0}",\n'
+                '                "👑 <b>Exempt tasks — no quota check</b>",\n'
+                '                "┏ <b>User</b> → " + _who + _nl17\n'
+                '                + "┠ <b>Where</b> → " + _ct + " " + _cn[:60] + _nl17\n'
+                '                + "┖ Owner/sudo are exempt — no bandwidth charged",\n'
+                '            )\n'
+            ).replace(_nph17, _bs17)
+            if _t17o in _t17:
+                _t17 = _t17.replace(_t17o, _t17n, 1)
+                with open(_tm17, "w", encoding="utf-8") as _f:
+                    _f.write(_t17)
+                _r17 = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _tm17],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if _r17.returncode == 0:
+                    log("  r17: exempt notes aggregated")
+                else:
+                    log("  r17: task_manager compile FAILED", "ERROR")
+            else:
+                log("  r17: exempt anchor missing", "WARN")
+        _rc17 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r1_core.py")
+        with open(_rc17, "r", encoding="utf-8") as _f:
+            _rcs17 = _f.read()
+        if "def agg_note" in _rcs17:
+            log("  r17: r1_core aggregator already present")
+        else:
+            _rc17o = (
+                '            await admin_log(\n'
+                '                "⚠️ <b>Task without pre-checkable link</b>",\n'
+                '                f"┏ <b>User</b> → <code>{user_id}</code>%N%"\n'
+                '                f"┠ <b>Where</b> → {_ctype} {_cname[:60]}%N%"\n'
+                '                f"┠ <b>Links seen</b> → {len(links)}%N%"\n'
+                '                f"┖ Falls back to the in-download check — the download "\n'
+                '                f"is still held and verified",\n'
+                '            )\n'
+                '            return None\n'
+            ).replace(_nph17, _bs17)
+            _rc17n = (
+                '            await agg_note(\n'
+                '                f"nopre:{user_id}",\n'
+                '                "⚠️ <b>Tasks without pre-checkable link</b>",\n'
+                '                "┏ <b>User</b> → <code>" + str(user_id) + "</code>" + _NL17\n'
+                '                + "┠ <b>Where</b> → " + _ctype + " " + _cname[:60] + _NL17\n'
+                '                + "┠ <b>Links seen</b> → " + str(len(links)) + _NL17\n'
+                '                + "┖ Falls back to the in-download check — still verified",\n'
+                '            )\n'
+                '            return None\n'
+            ).replace(_nph17, _bs17)
+            if _rc17o in _rcs17:
+                _rcs17 = _rcs17.replace(_rc17o, _rc17n, 1)
+                log("  r17: precheck notes aggregated")
+            else:
+                log("  r17: precheck anchor missing", "WARN")
+            _rcs17 = _rcs17 + _nl17 + _nl17 + (
+                '\n'
+                '\n'
+                '# WZFIX_R17 (v15.76): aggregated admin notes. A 70-song fan-out fired\n'
+                '# 70 separate "Exempt task" channel messages; agg_note counts a burst\n'
+                '# of tasks and flushes ONE message ~45s after the last event.\n'
+                '\n'
+                '_AGG17 = {}\n'
+                '_NL17 = chr(10)\n'
+                '\n'
+                '\n'
+                'async def agg_note(key, title, body):\n'
+                '    try:\n'
+                '        import asyncio as _aio17\n'
+                '\n'
+                '        _st = _AGG17.get(key)\n'
+                '        if _st is None:\n'
+                '            _st = _AGG17[key] = {"n": 0}\n'
+                '        _st["n"] += 1\n'
+                '        _t = _st.get("t")\n'
+                '        if _t is not None and not _t.done():\n'
+                '            _t.cancel()\n'
+                '        _st["ttl"] = title\n'
+                '        _st["bd"] = body\n'
+                '\n'
+                '        async def _fl17():\n'
+                '            try:\n'
+                '                await _aio17.sleep(45)\n'
+                '            except _aio17.CancelledError:\n'
+                '                return\n'
+                '            _it = _AGG17.pop(key, None)\n'
+                '            if not _it:\n'
+                '                return\n'
+                '            try:\n'
+                '                await admin_log(\n'
+                '                    _it.get("ttl") or "WZFIX note",\n'
+                '                    "┠ <b>Tasks</b> → " + str(_it["n"]) + _NL17\n'
+                '                    + (_it.get("bd") or ""),\n'
+                '                )\n'
+                '            except Exception:\n'
+                '                pass\n'
+                '\n'
+                '        _st["t"] = _aio17.get_running_loop().create_task(_fl17())\n'
+                '    except Exception as _e17:\n'
+                '        LOGGER.error(f"WZFIX agg_note failed: {_e17}")\n'
+            ).replace(_nph17, _bs17)
+            with open(_rc17, "w", encoding="utf-8") as _f:
+                _f.write(_rcs17)
+            _r17 = subprocess.run(
+                [sys.executable, "-m", "py_compile", _rc17],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if _r17.returncode == 0:
+                log("  r17: admin note aggregator added")
+            else:
+                log("  r17: r1_core compile FAILED", "ERROR")
+    except Exception as e:
+        log(f"  r17: FAILED — {e}", "ERROR")
+
     log("WZML-X-Bot patch kit applied")
     return True
 
