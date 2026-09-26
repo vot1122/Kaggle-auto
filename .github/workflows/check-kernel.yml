@@ -1,0 +1,38 @@
+name: Check Kaggle Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Query kernel status and latest log
+        shell: bash
+        run: |
+          set +e
+          AUTH="djoshi7:${KAGGLE_KEY}"
+          BASE="https://www.kaggle.com/api/v1"
+
+          echo '===== kernel status ====='
+          curl -sS -m 30 -u "$AUTH" "$BASE/kernels/status?user_name=djoshi7&kernel_slug=wzml-x"
+          echo; echo
+
+          echo '===== kernel list (versions) ====='
+          curl -sS -m 30 -u "$AUTH" "$BASE/kernels/list?user=djoshi7&sortBy=dateRun" | head -c 2000
+          echo; echo
+
+          echo '===== latest session output (tail) ====='
+          curl -sS -m 60 -u "$AUTH" "$BASE/kernels/output?user_name=djoshi7&kernel_slug=wzml-x" -o /tmp/kout
+          echo "output size: $(stat -c%s /tmp/kout 2>/dev/null)"
+          file /tmp/kout
+          if unzip -l /tmp/kout >/dev/null 2>&1; then
+            unzip -o -q /tmp/kout -d /tmp/koutd
+            find /tmp/koutd -type f -exec echo '--- {} ---' \; -exec tail -c 3000 {} \;
+          else
+            tail -c 4000 /tmp/kout
+          fi
+          echo
+        env:
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
