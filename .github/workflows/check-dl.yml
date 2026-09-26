@@ -1,0 +1,36 @@
+name: Check DL Chain
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe the download link chain
+        run: |
+          UA='Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+          ACC='text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+
+          echo '===== 1. main worker /health ====='
+          curl -sS -m 25 "https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev/health" || echo CURL_FAIL
+          echo
+
+          echo '===== 2. redirect worker /dl/dummy (follow redirects) ====='
+          curl -sSL -m 40 -A "$UA" -H "Accept: $ACC" -o /tmp/dlbody -w 'final_url=%{url_effective} http_code=%{http_code} redirects=%{num_redirects}\n' "https://freefire-joshi.workers.dev/dl/dummytoken123?user=1" || echo CURL_FAIL
+          echo '--- body first 900 bytes ---'
+          head -c 900 /tmp/dlbody
+          echo
+
+          echo '===== 3. main worker /dl/dummy directly ====='
+          curl -sS -m 40 -A "$UA" -H "Accept: $ACC" -o /tmp/dlbody2 -w 'http_code=%{http_code}\n' "https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev/dl/dummytoken123?user=1" || echo CURL_FAIL
+          echo '--- body first 900 bytes ---'
+          head -c 900 /tmp/dlbody2
+          echo
+
+          echo '===== 4. xstrm player page (dummy) ====='
+          curl -sS -m 40 -A "$UA" -H "Accept: $ACC" -o /tmp/xstrmbody -w 'http_code=%{http_code}\n' "https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev/xstrm/dummytoken123" || echo CURL_FAIL
+          echo '--- body first 400 bytes ---'
+          head -c 400 /tmp/xstrmbody
+          echo
