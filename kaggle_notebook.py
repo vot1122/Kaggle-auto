@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v15.82"
+    ver = "v15.83"
 
     def _r19_poll():
         import time as _r19t
