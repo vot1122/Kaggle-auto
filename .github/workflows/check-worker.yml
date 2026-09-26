@@ -10,7 +10,7 @@ jobs:
       - name: Install Kaggle CLI (pinned 1.6.17 for legacy auth)
         run: pip install kaggle==1.6.17
 
-      - name: Pull Phase B worker logs
+      - name: Pull Phase B worker logs + server-side metadata
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
@@ -19,13 +19,15 @@ jobs:
             echo "========== wzml-worker-$i =========="
             mkdir -p out$i
             kaggle kernels output djoshi7/wzml-worker-$i -p out$i || echo "(pull failed)"
-            echo "--- log ---"
+            echo "--- log (last 30 lines) ---"
             if [ -f out$i/wzml-worker-$i.log ]; then
-              cat out$i/wzml-worker-$i.log
-            else
+              tail -c 4000 out$i/wzml-worker-$i.log
+n            else
               echo "(no log file)"
-              ls -la out$i || true
             fi
-            echo "--- files ---"
-            ls -la out$i 2>/dev/null || true
+            echo "--- server-side metadata ---"
+            mkdir -p meta$i
+            kaggle kernels pull djoshi7/wzml-worker-$i -p meta$i -m || echo "(pull -m failed)"
+            cat meta$i/kernel-metadata.json 2>/dev/null || true
+            echo ""
           done
