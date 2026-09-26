@@ -1,0 +1,59 @@
+name: Worker Dataset Probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install Kaggle CLI (pinned 1.6.17 for legacy auth)
+        run: pip install kaggle==1.6.17
+
+      - name: Re-push worker-1 with a probe script
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p probe
+          cat > probe/kernel-metadata.json <<'EOF'
+          {
+            "id": "djoshi7/wzml-worker-1",
+            "title": "wzml-worker-1",
+            "code_file": "worker_boot.py",
+            "language": "python",
+            "kernel_type": "script",
+            "is_private": "true",
+            "enable_gpu": "false",
+            "enable_tpu": "false",
+            "enable_internet": "true",
+            "dataset_sources": ["djoshi7/wzmlx-config"],
+            "competition_sources": [],
+            "kernel_sources": [],
+            "model_sources": []
+          }
+          EOF
+          cat > probe/worker_boot.py <<'EOF'
+          import os
+          print("probe: input dir:", os.listdir("/kaggle/input") if os.path.isdir("/kaggle/input") else "MISSING")
+          if os.path.isdir("/kaggle/input"):
+              for d in os.listdir("/kaggle/input"):
+                  try:
+                      print("probe:", d, "->", os.listdir(os.path.join("/kaggle/input", d))[:8])
+                  except Exception as e:
+                      print("probe:", d, "-> ERR", e)
+          p = "/kaggle/input/wzmlx-config/config.env"
+          print("probe: config.env exists:", os.path.isfile(p))
+          EOF
+          kaggle kernels push -p probe
+      - name: Wait for the run to finish
+        run: sleep 90
+      - name: Pull the probe log
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p out
+          kaggle kernels output djoshi7/wzml-worker-1 -p out || true
+          cat out/wzml-worker-1.log || true
