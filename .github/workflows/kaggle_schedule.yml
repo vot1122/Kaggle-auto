@@ -33,8 +33,8 @@
 #   shared per-IP quotas. Secrets are never committed to this repo
 #   or written into the public notebook - they live only in the
 #   private Kaggle config dataset. KAGGLE_USERNAME/KAGGLE_KEY are
-#   synced the same way so the bot can start Phase B worker
-#   sessions through the Kaggle API.
+#   synced by their own unconditional step so Phase B worker
+#   dispatch always has credentials.
 #
 # PLACE AT: .github/workflows/kaggle_schedule.yml
 # ============================================================
@@ -118,40 +118,19 @@ jobs:
           echo "config.env not found in the dataset - skipping secret sync"
           exit 0
         fi
-        CHANGED=0
         if grep -q "^SPOTIFY_CLIENT_ID=\"$SPID\"" config.env && grep -q "^SPOTIFY_CLIENT_SECRET=\"$SPEC\"" config.env; then
-          echo "Spotify credentials already up to date"
-        else
-          if grep -q "^SPOTIFY_CLIENT_ID=" config.env; then
-            sed -i "s|^SPOTIFY_CLIENT_ID=.*|SPOTIFY_CLIENT_ID=\"$SPID\"|" config.env
-          else
-            printf 'SPOTIFY_CLIENT_ID="%s"\n' "$SPID" >> config.env
-          fi
-          if grep -q "^SPOTIFY_CLIENT_SECRET=" config.env; then
-            sed -i "s|^SPOTIFY_CLIENT_SECRET=.*|SPOTIFY_CLIENT_SECRET=\"$SPEC\"|" config.env
-          else
-            printf 'SPOTIFY_CLIENT_SECRET="%s"\n' "$SPEC" >> config.env
-          fi
-          CHANGED=1
-        fi
-        if grep -q "^KAGGLE_USERNAME=\"$KAGGLE_USERNAME\"" config.env && grep -q "^KAGGLE_KEY=\"$KAGGLE_KEY\"" config.env; then
-          echo "Kaggle credentials already up to date"
-        else
-          if grep -q "^KAGGLE_USERNAME=" config.env; then
-            sed -i "s|^KAGGLE_USERNAME=.*|KAGGLE_USERNAME=\"$KAGGLE_USERNAME\"|" config.env
-          else
-            printf 'KAGGLE_USERNAME="%s"\n' "$KAGGLE_USERNAME" >> config.env
-          fi
-          if grep -q "^KAGGLE_KEY=" config.env; then
-            sed -i "s|^KAGGLE_KEY=.*|KAGGLE_KEY=\"$KAGGLE_KEY\"|" config.env
-          else
-            printf 'KAGGLE_KEY="%s"\n' "$KAGGLE_KEY" >> config.env
-          fi
-          CHANGED=1
-        fi
-        if [ "$CHANGED" = "0" ]; then
-          echo "all secrets up to date - nothing to push"
+          echo "Spotify credentials already up to date - nothing to push"
           exit 0
+        fi
+        if grep -q "^SPOTIFY_CLIENT_ID=" config.env; then
+          sed -i "s|^SPOTIFY_CLIENT_ID=.*|SPOTIFY_CLIENT_ID=\"$SPID\"|" config.env
+        else
+          printf 'SPOTIFY_CLIENT_ID="%s"\n' "$SPID" >> config.env
+        fi
+        if grep -q "^SPOTIFY_CLIENT_SECRET=" config.env; then
+          sed -i "s|^SPOTIFY_CLIENT_SECRET=.*|SPOTIFY_CLIENT_SECRET=\"$SPEC\"|" config.env
+        else
+          printf 'SPOTIFY_CLIENT_SECRET="%s"\n' "$SPEC" >> config.env
         fi
         cat > dataset-metadata.json <<'META'
         {
@@ -160,8 +139,48 @@ jobs:
           "licenses": [{"name": "CC0-1.0"}]
         }
         META
-        kaggle datasets version -p . -m "sync Spotify + Kaggle credentials from GitHub secrets" --dir-mode skip
+        kaggle datasets version -p . -m "sync Spotify credentials from GitHub secrets" --dir-mode skip
         echo "Spotify credentials synced into the Kaggle config dataset"
+
+    - name: Sync Kaggle credentials to config dataset (Phase B)
+      env:
+        KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+        KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      run: |
+        set -e
+        if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+          echo "KAGGLE secrets missing - skipping"
+          exit 0
+        fi
+        mkdir -p /tmp/cfgkag && cd /tmp/cfgkag
+        kaggle datasets download djoshi7/wzmlx-config -p . --unzip --force >/dev/null 2>&1 || true
+        if [ ! -f config.env ]; then
+          echo "config.env not found in the dataset - skipping"
+          exit 0
+        fi
+        if grep -q "^KAGGLE_USERNAME=\"$KAGGLE_USERNAME\"" config.env && grep -q "^KAGGLE_KEY=\"$KAGGLE_KEY\"" config.env; then
+          echo "Kaggle credentials already up to date"
+          exit 0
+        fi
+        if grep -q "^KAGGLE_USERNAME=" config.env; then
+          sed -i "s|^KAGGLE_USERNAME=.*|KAGGLE_USERNAME=\"$KAGGLE_USERNAME\"|" config.env
+        else
+          printf 'KAGGLE_USERNAME="%s"\n' "$KAGGLE_USERNAME" >> config.env
+        fi
+        if grep -q "^KAGGLE_KEY=" config.env; then
+          sed -i "s|^KAGGLE_KEY=.*|KAGGLE_KEY=\"$KAGGLE_KEY\"|" config.env
+        else
+          printf 'KAGGLE_KEY="%s"\n' "$KAGGLE_KEY" >> config.env
+        fi
+        cat > dataset-metadata.json <<'META'
+        {
+          "title": "wzmlx-config",
+          "id": "djoshi7/wzmlx-config",
+          "licenses": [{"name": "CC0-1.0"}]
+        }
+        META
+        kaggle datasets version -p . -m "sync Kaggle credentials (Phase B worker dispatch)" --dir-mode skip
+        echo "Kaggle credentials synced into the config dataset"
 
     - name: Determine action from trigger
       id: action
