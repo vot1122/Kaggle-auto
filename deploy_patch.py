@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c8 (v15.83.8).
+"""One-shot patch loader: R25c9 (v15.83.9).
 
-The real payload is served from Drive (uploaded byte-exact, no
-hand-copying); this downloads it, verifies its sha256, and runs it.
+The real payload is served from Drive (uploaded byte-exact); this
+downloads it, verifies its sha256, and runs it.
 
-R25c8: catalog card with live per-song marks, ONE combined worker
-status via the Mongo status channel, unlimited workers (one per 6
-songs), whole-batch playlist, BUILD bumped to v15.83.8 everywhere
-so the stale v15.83 session retires itself.
+R25c9: fixes the pymongo truth-test crash (r25c8 did
+bool(collection), which killed the leader slice and every worker at
+startup — zero songs delivered) and makes queued workers keep the
+batch open (Kaggle runs ~5 sessions at a time).
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1-hSn8NCndRoMppEl7BwTIJavJNPSWiTR&export=download&confirm=t"
-EXPECT_SHA256 = "fe0b5c80baecc4e91e1af01708a8967e50f173b282bdb44c3fafece16f70ddc4"
+URL = "https://drive.usercontent.google.com/download?id=1k4LTHst8p-l_vEUIe89NZQc9Cb84OSBJ&export=download&confirm=t"
+EXPECT_SHA256 = "948e8f5fd869f1b1fbde147fabc987c9d2c1901a9b5d77ff38ecd21b3bac7094"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
