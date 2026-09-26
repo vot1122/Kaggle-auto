@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c6 (v15.83.6).
+"""One-shot patch loader: R25c7 (v15.83.7).
 
 The real payload is served from Drive (uploaded byte-exact, no
 hand-copying); this downloads it, verifies its sha256, and runs it.
 
-R25c6: workers download the whole slice first, then send all songs
-together at the end; delivery chat is LEECH_LOG_CHAT from the
-MongoDB-backed bot settings (command chat as fallback).
+R25c7: flood-aware sendAudio (429 retry + stagger/pace), playlist
+import fix, leader slice on the worker path (no task-detail
+messages between songs), sweep chat/token, catalog 429 retries.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1v008cw-Ucs-Lp3AA-sJ6ALSssdQ7j3s1&export=download&confirm=t"
-EXPECT_SHA256 = "1e44bdcb7a64ba1e4b65ee324cf71bea5253ffd56751e04941b933b54541b441"
+URL = "https://drive.usercontent.google.com/download?id=1AeqwijdDA_nTeQ0wzvehAfXmsupKbuX4&export=download&confirm=t"
+EXPECT_SHA256 = "1d8ffa708c87b3837256f5853d86402205dad3f6bf811b661b0ca0068eead8ee"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
