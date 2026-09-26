@@ -19,12 +19,13 @@ jobs:
             echo "========== wzml-worker-$i =========="
             mkdir -p out$i
             kaggle kernels output djoshi7/wzml-worker-$i -p out$i || echo "(pull failed)"
-            echo "--- log (last 30 lines) ---"
+            echo "--- log tail ---"
             if [ -f out$i/wzml-worker-$i.log ]; then
               tail -c 4000 out$i/wzml-worker-$i.log
-n            else
+            else
               echo "(no log file)"
             fi
+            echo ""
             echo "--- server-side metadata ---"
             mkdir -p meta$i
             kaggle kernels pull djoshi7/wzml-worker-$i -p meta$i -m || echo "(pull -m failed)"
