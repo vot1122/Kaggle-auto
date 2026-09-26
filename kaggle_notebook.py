@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.81  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.82  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -100,7 +100,7 @@ NOTIFIED_STREAM_READY = False
 
 
 def _r19_start_watchdog():
-    """WZFIX_R19 (v15.81): a `kaggle kernels push` while a session is
+    """WZFIX_R19 (v15.82): a `kaggle kernels push` while a session is
     already running does NOT restart it - the pushed version sits in
     the repo while the old bot keeps serving. This daemon thread
     polls the repo WZFIX BUILD marker; when it stops
@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v15.81"
+    ver = "v15.82"
 
     def _r19_poll():
         import time as _r19t
@@ -2325,7 +2325,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.81) — per-link stream passwords.
+# WZFIX Round 5 (v15.82) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -4237,7 +4237,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.81 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.82 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4411,7 +4411,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.81)\n'
+                '\n    # WZFIX r5 streampass (v15.82)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4436,7 +4436,7 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition R8 — v15.81: per-link pass user-gate fix (loop).
+    # Kaggle addition R8 — v15.82: per-link pass user-gate fix (loop).
     # The ?user=1 gates only accepted tokens signed with the GLOBAL
     # STREAM_PASS, so a link unlocked with its own per-link password
     # reloaded into the password prompt forever. Also, addition K's
@@ -4536,7 +4536,7 @@ def apply_userrepo_patches():
             _anchor = "# ─── owner command ─────────────────────────────────────────────────"
             _ins = (
                 "\n\nasync def link_token_ok(request):\n"
-                "    \"\"\"WZFIX Round 8 (v15.81): True only when THIS link has a custom\n"
+                "    \"\"\"WZFIX Round 8 (v15.82): True only when THIS link has a custom\n"
                 "    password AND the request's ?auth= token verifies against it.\n"
                 "\n"
                 "    Why: the ?user=1 gate in stream_server checks the token against\n"
@@ -4581,7 +4581,7 @@ def apply_userrepo_patches():
         log(f"  r8: r5_streampass FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.81 Round 6: /start user registry.
+    # Kaggle addition M — v15.82 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4653,7 +4653,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
-    # Kaggle addition N — v15.81 Round 6b: stream page auth-loop fix.
+    # Kaggle addition N — v15.82 Round 6b: stream page auth-loop fix.
     # The stream page sent its boot probe and the video/download src
     # WITHOUT the auth token for normal (non-user) links, so a correct
     # password just reloaded into the same 401 — an endless password
@@ -4746,7 +4746,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6b FAILED — {e}", "ERROR")
 
-    # R16 (v15.81): direct-download auth page. When a protected
+    # R16 (v15.82): direct-download auth page. When a protected
     # stream link is opened directly in a browser (the Telegram
     # download option, /dl/<token>?user=1), the password modal that
     # lives inside the player page never loads, so the user saw raw
@@ -4925,12 +4925,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.81"\n'
-                'WZFIX_DATE = "25 Sep 2026 (IST)"\n'
+                'WZFIX_BUILD = "v15.82"\n'
+                'WZFIX_DATE = "26 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.81 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.81 running")
+        log("  r1: versions.py written (v15.82 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.82 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -5157,7 +5157,7 @@ async def _wzfix_record_start(message):
                 '    TgClient.bot.add_handler(\n'
                 '        CallbackQueryHandler(wzfix_cancel_cb, filters=regex("^wzfixcancel$"))\n'
                 '    )\n'
-                '    # WZFIX r11 (v15.81): artist-batch playlist button\n'
+                '    # WZFIX r11 (v15.82): artist-batch playlist button\n'
                 '    from ..helper.wzfix.r3_music import wzfix_pl_go\n'
                 '    TgClient.bot.add_handler(\n'
                 '        CallbackQueryHandler(wzfix_pl_go, filters=regex("^wzfxpl:"))\n'
@@ -5208,7 +5208,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: r2_web.py FAILED — {e}", "ERROR")
 
-    # Kaggle addition O — v15.81 Round 9: dashboard reliability fixes
+    # Kaggle addition O — v15.82 Round 9: dashboard reliability fixes
     # (login form always visible — no more black page, connection banner
     # with auto-retry, no-flicker section updates, history diff,
     # no-store headers) + stream auth loop-breaker with diagnostics +
@@ -5593,7 +5593,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r9: wserver patch FAILED — {e}", "ERROR")
 
-    # J-31: silent cmd-message fallback (v15.81) — the uploader's
+    # J-31: silent cmd-message fallback (v15.82) — the uploader's
     # "Deleted Cmd Message! Don't delete the cmd message again!" warning
     # fires for EVERY fan-out clone (clones carry fake message ids the
     # chat never had), so artist batches spam it. Fall back silently to
@@ -5653,7 +5653,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-31 patch FAILED — {e}", "ERROR")
 
-    # J-32: deterministic fan-out merge (v15.81) — artist-batch clones
+    # J-32: deterministic fan-out merge (v15.82) — artist-batch clones
     # move their song into the leader's folder and finish quietly;
     # only the task that finishes last uploads, so every song reaches
     # the chat exactly once (this replaces the fragile upstream
@@ -5737,7 +5737,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-32 patch FAILED — {e}", "ERROR")
 
-    # J-33: single-copy DM (v15.81) — with BOT_PM on and the batch
+    # J-33: single-copy DM (v15.82) — with BOT_PM on and the batch
     # running in the user's DM, every song was sent to the DM twice
     # (upload reply + PM copy). Music batches keep just the reply.
     try:
@@ -5788,7 +5788,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-33 patch FAILED — {e}", "ERROR")
 
-    # J-34: m4a passthrough (v15.81) — every song was transcoded to
+    # J-34: m4a passthrough (v15.82) — every song was transcoded to
     # mp3 (aac -> mp3 re-encode: CPU-bound and quality-losing). Music
     # now downloads YouTube's native m4a audio and copies it into the
     # container (no transcode): faster, lighter and better quality.
@@ -7179,7 +7179,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-23 patch FAILED — {e}", "ERROR")
 
-    # J-30: quiet music fan-out (v15.81) — artist batches keep the chat
+    # J-30: quiet music fan-out (v15.82) — artist batches keep the chat
     # clean: no per-song "Downloaded! Waiting..." or per-song error
     # messages (the artist note tracks progress), a compact file list
     # with one line per song, and the uploaded songs collected for the
@@ -7195,7 +7195,7 @@ async def _wzfix_record_start(message):
                 '        await send_message(self.message, '
                 'f"{self.tag} {escape(str(error))}")'
             )
-            _new30a = r'''        # WZFIX r11 quiet fan-out (v15.81): artist batches track
+            _new30a = r'''        # WZFIX r11 quiet fan-out (v15.82): artist batches track
         # progress in one note — no per-song messages
         _wzfix_quiet = False
         try:
@@ -7213,7 +7213,7 @@ async def _wzfix_record_start(message):
             _old30b = (
                 '        await send_message(self.message, msg, button)'
             )
-            _new30b = r'''        # WZFIX r11 quiet fan-out (v15.81): failed songs are
+            _new30b = r'''        # WZFIX r11 quiet fan-out (v15.82): failed songs are
         # folded into the artist note
         _wzfix_quiet = False
         try:
@@ -7239,7 +7239,7 @@ async def _wzfix_record_start(message):
         if not _wzfix_quiet:
             await send_message(self.message, msg, button)'''
             _old30c = "                    if Config.MEDIA_STORE and ("
-            _new30c = r'''                    # WZFIX r11 quiet fan-out (v15.81): one compact
+            _new30c = r'''                    # WZFIX r11 quiet fan-out (v15.82): one compact
                     # line per song, and every uploaded song recorded
                     # for the playlist prompt
                     try:
@@ -7678,7 +7678,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.81) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.82) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -7693,7 +7693,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.81): the hyper"
+                "            # WZFIX music keep-chat (v15.82): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
@@ -7897,7 +7897,7 @@ async def _wzfix_record_start(message):
             log("  r2: direct_link_generator already compatible")
     except Exception as e:
         log(f"  r2: direct_link_generator patch FAILED — {e}", "ERROR")
-    # R17 (v15.81): three fixes reported after R16 — the download
+    # R17 (v15.82): three fixes reported after R16 — the download
     # password page never showed (wserver's /dl/ proxy strips the
     # Accept header, so the gate now keys on the download kind; the
     # page also posted to the internal-only /_auth and now uses the
@@ -8093,7 +8093,7 @@ async def _wzfix_record_start(message):
             _rcs17 = _rcs17 + _nl17 + _nl17 + (
                 '\n'
                 '\n'
-                '# WZFIX_R17 (v15.81): aggregated admin notes. A 70-song fan-out fired\n'
+                '# WZFIX_R17 (v15.82): aggregated admin notes. A 70-song fan-out fired\n'
                 '# 70 separate "Exempt task" channel messages; agg_note counts a burst\n'
                 '# of tasks and flushes ONE message ~45s after the last event.\n'
                 '\n'
@@ -8151,7 +8151,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r17: FAILED — {e}", "ERROR")
 
-    # R18 (v15.81): the raw-401 came from the r5 per-link gate
+    # R18 (v15.82): the raw-401 came from the r5 per-link gate
     # that fires BEFORE the user gate R16/R17 patched - it now
     # serves the password page for download-kind requests too,
     # and the page posts the link token so per-link passwords
@@ -8283,7 +8283,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r18: FAILED — {e}", "ERROR")
 
-    # R20 (v15.81): the /dl/ route serves kind="bulk", not "download" -
+    # R20 (v15.82): the /dl/ route serves kind="bulk", not "download" -
     # the R17/R18 gates never matched, so the password page never
     # showed for direct download links. Both gates now accept bulk.
     try:
@@ -8319,7 +8319,7 @@ async def _wzfix_record_start(message):
                 log(f"  r20: expected 2 gates, found {_n20} - not written", "WARN")
     except Exception as e:
         log(f"  r20: FAILED — {e}", "ERROR")
-    # R21 (v15.81): the download password page fetch() was never
+    # R21 (v15.82): the download password page fetch() was never
     # closed - a JS syntax error killed the whole script, so the
     # Unlock button did nothing after entering the right password.
     try:
@@ -8354,7 +8354,7 @@ async def _wzfix_record_start(message):
                 log(f"  r21: expected 1 anchor, found {_n21} - not written", "WARN")
     except Exception as e:
         log(f"  r21: FAILED - {e}", "ERROR")
-    # R22 (v15.81): the per-task botpm check spammed a Task Checks
+    # R22 (v15.82): the per-task botpm check spammed a Task Checks
     # card for every song in a batch (24 at once) because Telegram
     # rate-limits send_chat_action right after a restart and any
     # error counted as not-started. Flood/timeout errors now count
@@ -8429,7 +8429,7 @@ async def _wzfix_record_start(message):
                 log(f"  r22: expected 1 anchor, found {_n22} - not written", "WARN")
     except Exception as e:
         log(f"  r22: FAILED - {e}", "ERROR")
-    # R23 (v15.81) PHASE-A: YouTube rate limits per IP - the fix is
+    # R23 (v15.82) PHASE-A: YouTube rate limits per IP - the fix is
     # the current anti-throttle stack, not more hammering. Installs:
     # deno (JS runtime yt-dlp now requires for n/sig challenges), the
     # bgutil PO-token server (proof-of-origin tokens so datacenter IPs
@@ -8553,6 +8553,107 @@ async def _wzfix_record_start(message):
             log("  r23c: fan-out default already 6")
     except Exception as e:
         log(f"  r23c: FAILED - {e}", "ERROR")
+    # R24 (v15.82): artist-batch repair. The v15.74 m4a passthrough
+    # parsed the music quality tail (b-m4a-5) as three dash-parts but
+    # it only has two, so every music task died with
+    # "list index out of range" before downloading anything. Also:
+    # per-song streaming uploads (with -z the one-zip merge stays),
+    # failed songs are now counted, the launch gate holds even when
+    # tasks fail fast, and stray words after the artist link are no
+    # longer glued onto every YouTube search.
+    try:
+        _p24a = os.path.join(WZMLX_DIR, "bot/helper/mirror_leech_utils/download_utils/yt_dlp_download.py")
+        with open(_p24a, "r", encoding="utf-8") as _f:
+            _s24a = _f.read()
+        if "r24a" in _s24a:
+            log("  r24a: passthrough already fixed")
+        else:
+            _old24a = '            qual = f"{_pfx34}/b"\n            qual = audio_info[0]\n            audio_format = audio_info[1]\n            rate = audio_info[2]\n'
+            if _s24a.count(_old24a) == 1:
+                _new24a = '            qual = f"{_pfx34}/b"\n            audio_format = audio_info[0] if audio_info else "m4a"\n            rate = audio_info[1] if len(audio_info) > 1 else "5"\n'
+                _s24a = _s24a.replace(_old24a, _new24a, 1)
+                with open(_p24a, "w", encoding="utf-8") as _f:
+                    _f.write(_s24a)
+                log("  r24a: m4a passthrough crash fixed")
+            else:
+                log("  r24a: anchor missing", "WARN")
+    except Exception as e:
+        log(f"  r24a: FAILED - {e}", "ERROR")
+
+    try:
+        _p24b = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r3_music.py")
+        with open(_p24b, "r", encoding="utf-8") as _f:
+            _s24b = _f.read()
+        if "_wz_r24_fail" in _s24b:
+            log("  r24b: launcher already hardened")
+        else:
+            _ok24 = 0
+            for _o24, _n24 in [
+                ('                "leader_mid": None,\n', '                "leader_mid": None,\n                "mode": "song",\n'),
+                ('    _shared[f"/{_folder}"]["_wzfix"]["leader_mid"] = _base + 100000\n', '    _shared[f"/{_folder}"]["_wzfix"]["leader_mid"] = _base + 100000\n    if "-z" in _flags:\n        _shared[f"/{_folder}"]["_wzfix"]["mode"] = "zip"\n'),
+                ('    _jobs = _fanout_jobs()\n', '    # WZFIX r24: stray words typed after the artist link were\n    # being glued onto every YouTube search. Keep real flags and\n    # their values, drop the rest with a note in the log.\n    _valf24 = {"-n", "-s", "-sd", "-tl", "-ul", "-up"}\n    _keep24 = []\n    _drop24 = []\n    _toks24 = (_flags or "").split()\n    _i24 = 0\n    while _i24 < len(_toks24):\n        _t24 = _toks24[_i24]\n        if _t24 in _valf24 and _i24 + 1 < len(_toks24):\n            _keep24.append(_t24)\n            _keep24.append(_toks24[_i24 + 1])\n            _i24 += 2\n            continue\n        if _t24.startswith("-"):\n            _keep24.append(_t24)\n        else:\n            _drop24.append(_t24)\n        _i24 += 1\n    if _drop24:\n        _log("WZFIX music: ignoring extra words: " + " ".join(_drop24))\n        _flags = " ".join(_keep24)\n    _jobs = _fanout_jobs()\n'),
+                ('    for i, (query, clean) in enumerate(tracks):\n', '    _inflight24 = set()\n    for i, (query, clean) in enumerate(tracks):\n'),
+                ('            while True:\n                _ac = _active_dl_count()\n                if _ac is None or _ac < _jobs:\n                    break\n                await asyncio.sleep(0.5)\n', '            while True:\n                if len(_inflight24) < _jobs:\n                    break\n                await asyncio.sleep(0.5)\n'),
+                ('            asyncio.create_task(_go())\n', '            _inflight24.add(m2.id)\n            asyncio.create_task(_go())\n'),
+                ('                    _log(f"WZFIX music: artist track failed: {e}")\n', '                    _wz_r24_fail(_shared, _folder, _m, e)\n                finally:\n                    _inflight24.discard(_m.id)\n'),
+                ('        except Exception as e:\n            _log(f"WZFIX music: artist fan-out dispatch failed: {e}")\n', '        except Exception as e:\n            _log(f"WZFIX music: artist fan-out dispatch failed: {e}")\n            _inflight24.pop(_base + 100000 + i, None)\n'),
+                ('            "📦 <b>all songs are sent together</b> when every one "\n            "finishes — one zip with <code>-z</code>",\n', '            "📦 each song is sent as soon as it finishes "\n            "with <code>-z</code> you get one zip instead",\n'),
+            ]:
+                if _s24b.count(_o24) == 1:
+                    _s24b = _s24b.replace(_o24, _n24, 1)
+                    _ok24 += 1
+                else:
+                    log("  r24b: one anchor missing (skip)", "WARN")
+            _s24b = _s24b + '\n\n# WZFIX r24 helpers (v15.82)\ndef _wz_r24_fail(_shared, _folder, _m, _e):\n    _log(f"WZFIX music: artist track failed: {_e}")\n    try:\n        _wz = _shared.get(f"/{_folder}", {}).get("_wzfix")\n        if _wz is not None:\n            _t = getattr(_m, "_wzfix_music_title", "") or "song"\n            _fl = _wz.setdefault("failed", [])\n            if _t not in _fl:\n                _fl.append(_t)\n    except Exception:\n        pass\n'
+            with open(_p24b, "w", encoding="utf-8") as _f:
+                _f.write(_s24b)
+            log(f"  r24b: launcher hardened ({_ok24}/9 anchors)")
+    except Exception as e:
+        log(f"  r24b: FAILED - {e}", "ERROR")
+
+    try:
+        _p24c = os.path.join(WZMLX_DIR, "bot/helper/listeners/task_listener.py")
+        with open(_p24c, "r", encoding="utf-8") as _f:
+            _s24c = _f.read()
+        if "r24 song mode" in _s24c:
+            log("  r24c: song mode already applied")
+        else:
+            _old24c = '        if _wz15 is not None and _wz15.get("leader_mid"):\n'
+            if _s24c.count(_old24c) == 1:
+                _new24c = '        if _wz15 is not None and _wz15.get("leader_mid"):\n            if _wz15.get("mode") != "zip":\n                _wz15.setdefault("done", set()).add(self.mid)\n        if (\n            _wz15 is not None\n            and _wz15.get("leader_mid")\n            and _wz15.get("mode") == "zip"\n        ):\n'
+                _s24c = _s24c.replace(_old24c, _new24c, 1)
+                _s24c = _s24c.replace(
+                    "WZFIX r15 deterministic merge: music fan-out clones",
+                    "WZFIX r24 song mode + r15 deterministic merge: music fan-out clones",
+                    1,
+                )
+                with open(_p24c, "w", encoding="utf-8") as _f:
+                    _f.write(_s24c)
+                log("  r24c: per-song streaming uploads (zip only with -z)")
+            else:
+                log("  r24c: anchor missing", "WARN")
+    except Exception as e:
+        log(f"  r24c: FAILED - {e}", "ERROR")
+
+    try:
+        import py_compile
+
+        for _p24 in [
+            "bot/helper/mirror_leech_utils/download_utils/yt_dlp_download.py",
+            "bot/helper/wzfix/r3_music.py",
+            "bot/helper/listeners/task_listener.py",
+        ]:
+            _r24 = subprocess.run(
+                [sys.executable, "-m", "py_compile", os.path.join(WZMLX_DIR, _p24)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if _r24.returncode != 0:
+                log(f"  r24: compile FAILED for {_p24}", "ERROR")
+        log("  r24: v15.82 artist-batch repair applied")
+    except Exception as e:
+        log(f"  r24: FAILED - {e}", "ERROR")
     log("WZML-X-Bot patch kit applied")
     return True
 
@@ -9022,7 +9123,7 @@ def install_python_deps():
     except Exception as e:
         log(f"pip install failed: {e}", "ERROR")
 
-    # WZFIX r23 (v15.81): Kaggle preinstalls an old yt-dlp and
+    # WZFIX r23 (v15.82): Kaggle preinstalls an old yt-dlp and
     # plain pip -r sees it as satisfied - force the upgrade.
     # Current yt-dlp + curl-cffi impersonation is the anti-429 stack.
     try:
@@ -9959,7 +10060,7 @@ def main():
 
     env = os.environ.copy()
     env["PYTHONPATH"] = WZMLX_DIR + os.pathsep + env.get("PYTHONPATH", "")
-    # WZFIX r23 (v15.81): deno (JS runtime for yt-dlp challenges)
+    # WZFIX r23 (v15.82): deno (JS runtime for yt-dlp challenges)
     # lives in KAGGLE_WORKING/bin - put it on the bot PATH
     env["PATH"] = os.path.join(KAGGLE_WORKING, "bin") + os.pathsep + env.get("PATH", "")
 
