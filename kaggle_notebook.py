@@ -9721,7 +9721,7 @@ def install_python_deps():
     # the Kaggle API at batch time — the CLI must be present.
     try:
         subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-q", "kaggle"],
+            [sys.executable, "-m", "pip", "install", "-q", "kaggle==1.6.17"],
             timeout=180,
             capture_output=True,
             text=True,
