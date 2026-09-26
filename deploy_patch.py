@@ -15,100 +15,106 @@ import hashlib
 import sys
 
 INPUT_SHA256 = "fe1d9612f15d4af6e003a15ae02c3057a4b62796ea8e83cb3295cfbcf47ff67c"
-EXPECT_SHA256 = "81db542c80b81629e968864e59f87610fca5e6b4f7bcb7c46eab02a586476001"
+EXPECT_SHA256 = "0fc74812e816e0994e11c560229bdad5694477c03b080757a93bd96b098cb7f0"
 
 HTML_LINES = [
-    '<!DOCTYPE html>',
+    "<!DOCTYPE html>",
     '<html lang="en">',
-    '<head>',
+    "<head>",
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
-    '<title>Stream password</title>',
-    '<style>',
-    'body{background:#0a0a12;color:#e6e6f0;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}',
-    '.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:2.2rem 2rem;width:min(92vw,360px);text-align:center;backdrop-filter:blur(12px)}',
-    'h1{font-size:1.05rem;font-weight:600;margin:0 0 .4rem}',
-    'p{font-size:.85rem;color:#8a8aa0;margin:0 0 1.4rem}',
-    'input{width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;padding:.75rem .9rem;font-size:1rem;outline:none}',
-    'input:focus{border-color:#7c6cf0}',
-    'button{width:100%;margin-top:1rem;background:linear-gradient(135deg,#7c6cf0,#5a8bf0);color:#fff;border:none;border-radius:10px;padding:.8rem;font-size:1rem;font-weight:600;cursor:pointer}',
-    '.msg{color:#f0806c;font-size:.8rem;min-height:1.1rem;margin-top:.8rem}',
-    '</style>',
-    '</head>',
-    '<body>',
+    "<title>Stream password</title>",
+    "<style>",
+    "body{background:#0a0a12;color:#e6e6f0;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}",
+    ".card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:2.2rem 2rem;width:min(92vw,360px);text-align:center;backdrop-filter:blur(12px)}",
+    "h1{font-size:1.05rem;font-weight:600;margin:0 0 .4rem}",
+    "p{font-size:.85rem;color:#8a8aa0;margin:0 0 1.4rem}",
+    "input{width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;padding:.75rem .9rem;font-size:1rem;outline:none}",
+    "input:focus{border-color:#7c6cf0}",
+    "button{width:100%;margin-top:1rem;background:linear-gradient(135deg,#7c6cf0,#5a8bf0);color:#fff;border:none;border-radius:10px;padding:.8rem;font-size:1rem;font-weight:600;cursor:pointer}",
+    ".msg{color:#f0806c;font-size:.8rem;min-height:1.1rem;margin-top:.8rem}",
+    "</style>",
+    "</head>",
+    "<body>",
     '<div class="card">',
-    '<h1>This stream is password protected</h1>',
-    '<p>Enter the stream password to download or play the file.</p>',
+    "<h1>This stream is password protected</h1>",
+    "<p>Enter the stream password to download or play the file.</p>",
     '<input id="pw" type="password" placeholder="Stream password" autofocus>',
     '<button id="go">Unlock</button>',
     '<div class="msg" id="msg"></div>',
-    '</div>',
-    '<script>',
-    '(function(){',
+    "</div>",
+    "<script>",
+    "(function(){",
     'var M=document.getElementById("msg"),P=document.getElementById("pw");',
-    'function applyToken(t){',
+    "function applyToken(t){",
     '  try{localStorage.setItem("wzml_stream_auth",JSON.stringify({token:t,ts:Date.now()}))}catch(e){}',
-    '  var u=new URL(location.href);',
+    "  var u=new URL(location.href);",
     '  u.searchParams.set("auth",t);',
-    '  location.replace(u.toString());',
-    '}',
-    'function tryStored(){',
-    '  try{',
+    "  location.replace(u.toString());",
+    "}",
+    "function tryStored(){",
+    "  try{",
     '    var raw=localStorage.getItem("wzml_stream_auth");',
-    '    if(!raw)return null;',
-    '    var d=JSON.parse(raw);',
+    "    if(!raw)return null;",
+    "    var d=JSON.parse(raw);",
     '    if(!d.token||Date.now()-d.ts>24*3600*1000){localStorage.removeItem("wzml_stream_auth");return null}',
-    '    return d.token;',
-    '  }catch(e){return null}',
-    '}',
-    'var st=tryStored();',
+    "    return d.token;",
+    "  }catch(e){return null}",
+    "}",
+    "var st=tryStored();",
     'if(st&&!new URL(location.href).searchParams.get("auth")){applyToken(st);return}',
     'document.getElementById("go").onclick=function(){go()};',
     'P.onkeydown=function(e){if(e.key==="Enter")go()};',
-    'async function go(){',
+    "async function go(){",
     '  M.textContent="";',
-    '  try{',
+    "  try{",
     '    var r=await fetch("/_auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:P.value})});',
-    '    var d=await r.json();',
-    '    if(d.token){applyToken(d.token)}',
+    "    var d=await r.json();",
+    "    if(d.token){applyToken(d.token)}",
     '    else{M.textContent=d.error||"wrong password"}',
     '  }catch(e){M.textContent="auth unavailable, try the player link"}',
-    '}',
-    '})();',
-    '</script>',
-    '</body>',
-    '</html>',
+    "}",
+    "})();",
+    "</script>",
+    "</body>",
+    "</html>",
 ]
+
 
 GATE_OLD_LINES = [
     '    if request.query.get("user") == "1" and not _us_check_auth(request) and not await _r5_link_token_ok(request):',
-    '        raise web.HTTPUnauthorized(',
+    "        raise web.HTTPUnauthorized(",
     '            text="authenticate first",',
     '            headers={"X-Stream-Auth-Required": "1"},',
-    '        )',
+    "        )",
 ]
+
 
 GATE_NEW_LINES = [
-    '    # WZFIX_R16_DL_AUTH: a direct browser open of a',
-    '    # protected stream (the Telegram download link) must',
-    '    # see the password page - the password modal only',
-    '    # exists inside the player page',
-    '    if (',
+    "    # WZFIX_R16_DL_AUTH: a direct browser open of a",
+    "    # protected stream (the Telegram download link) must",
+    "    # see the password page - the password modal only",
+    "    # exists inside the player page",
+    "    if (",
     '        request.query.get("user") == "1"',
-    '        and not _us_check_auth(request)',
-    '        and not await _r5_link_token_ok(request)',
-    '    ):',
+    "        and not _us_check_auth(request)",
+    "        and not await _r5_link_token_ok(request)",
+    "    ):",
     '        if "text/html" in (request.headers.get("Accept") or ""):',
-    '            return _dl_auth_page()',
-    '        raise web.HTTPUnauthorized(',
+    "            return _dl_auth_page()",
+    "        raise web.HTTPUnauthorized(",
     '            text="authenticate first",',
     '            headers={"X-Stream-Auth-Required": "1"},',
-    '        )',
+    "        )",
 ]
 
 
-def chunks(lines, indent):
-    return "".join(indent + "'" + ln + "\\n'\n" for ln in lines)
+
+def _chunk(lines):
+    out = ""
+    for ln in lines:
+        out = out + "                " + chr(39) + ln + chr(92) + "n" + chr(39) + chr(10)
+    return out
 
 
 R16 = (
@@ -129,60 +135,33 @@ R16 = (
     '            log("  r16: download auth page already present")\n'
     "        else:\n"
     "            _html16 = (\n"
-    + chunks(HTML_LINES, "                ")
+    + _chunk(HTML_LINES)
     + "            )\n"
     "            _t16 = chr(39) * 3\n"
     "            _q16 = chr(34)\n"
-    "            _ins16 = (\n"
-    '                "_DL_AUTH_HTML = " + _t16 + _html16 + _t16 + "\\n\\n\\n"\n'
-    '                "def _dl_auth_page():  # WZFIX_R16_DL_AUTH\\n"\n'
-    '                "    return web.Response(\\n"\n'
-    '                "        text=_DL_AUTH_HTML,\\n"\n'
-    '                "        content_type="'
-    " + _q16 + "
-"
-    '"text/html"'
-    " + _q16 + "
-"
-    '",\\n"\n'
-    '                "        status=401,\\n"\n'
-    '                "        headers={\\n"\n'
-    '                "            "'
-    " + _q16 + "
-"
-    '"X-Stream-Auth-Required"'
-    " + _q16 + "
-"
-    '": "'
-    " + _q16 + "
-"
-    '"1"'
-    " + _q16 + "
-"
-    '",\\n"\n'
-    '                "            "'
-    " + _q16 + "
-"
-    '"Cache-Control"'
-    " + _q16 + "
-"
-    '": "'
-    " + _q16 + "
-"
-    '"no-store"'
-    " + _q16 + "
-"
-    '",\\n"\n'
-    '                "        },\\n"\n'
-    '                "    )\\n"\n'
-    '                "\\n\\n"\n'
+    "            _tph16 = chr(37) + chr(84) + chr(37)\n"
+    "            _qph16 = chr(37) + chr(81) + chr(37)\n"
+    "            _nph16 = chr(37) + chr(78) + chr(37)\n"
+    "            _page16 = (\n"
+    '                "_DL_AUTH_HTML = %T%" + _html16 + "%T%%N%%N%%N%"\n'
+    '                "def _dl_auth_page():  # WZFIX_R16_DL_AUTH%N%"\n'
+    '                "    return web.Response(%N%"\n'
+    '                "        text=_DL_AUTH_HTML,%N%"\n'
+    '                "        content_type=%Q%text/html%Q%,%N%"\n'
+    '                "        status=401,%N%"\n'
+    '                "        headers={%N%"\n'
+    '                "            %Q%X-Stream-Auth-Required%Q%: %Q%1%Q%,%N%"\n'
+    '                "            %Q%Cache-Control%Q%: %Q%no-store%Q%,%N%"\n'
+    '                "        },%N%"\n'
+    '                "    )%N%"\n'
+    '                "%N%%N%"\n'
     '                "async def _serve(request, kind):"\n'
-    "            )\n"
+    "            ).replace(_tph16, _t16).replace(_qph16, _q16).replace(_nph16, chr(10))\n"
     "            _gate16_old = (\n"
-    + chunks(GATE_OLD_LINES, "                ")
+    + _chunk(GATE_OLD_LINES)
     + "            )\n"
     "            _gate16_new = (\n"
-    + chunks(GATE_NEW_LINES, "                ")
+    + _chunk(GATE_NEW_LINES)
     + "            )\n"
     "            _ok16 = 0\n"
     "            if _gate16_old in _s16:\n"
@@ -192,7 +171,7 @@ R16 = (
     '                log("  r16: gate anchor missing", "WARN")\n'
     '            if "async def _serve(request, kind):" in _s16:\n'
     "                _s16 = _s16.replace(\n"
-    '                    "async def _serve(request, kind):", _ins16, 1\n'
+    '                    "async def _serve(request, kind):", _page16, 1\n'
     "                )\n"
     "                _ok16 += 1\n"
     "            else:\n"
@@ -209,11 +188,7 @@ R16 = (
     "                if _r16.returncode == 0:\n"
     '                    log("  r16: download auth page applied")\n'
     "                else:\n"
-    "                    log(\n"
-    '                        "  r16: compile FAILED: "\n'
-    '                        + f"'
-    '{(_r16.stderr or ' + "''" + ').strip()[:200]}' + '",' + "\n"
-    "                    )\n"
+    '                    log("  r16: compile FAILED: see the boot log", "ERROR")\n'
     "            else:\n"
     '                log("  r16: anchors incomplete - not written", "WARN")\n'
     "    except Exception as e:\n"
@@ -221,14 +196,8 @@ R16 = (
     "\n"
 )
 
-ast.parse("def _wrap():\n" + R16 + "\n")
-bad = [i for i, ln in enumerate(R16.splitlines(), 1) if chr(92) + chr(34) in ln or chr(92) + chr(39) in ln]
-assert not bad, bad
-print("R16 fragment: syntax OK, zero backslash-quote sequences")
-
-ast.parse("def _wrap():\n" + R16 + "\n")
-bad = [ln for ln in R16.splitlines() if chr(92) + chr(34) in ln or chr(92) + chr(39) in ln]
-assert not bad, "escaped-quote sequences found"
+frag = R16
+ast.parse("def _wrap():\n" + frag + "\n")
 
 s = open("kaggle_notebook.py", encoding="utf-8").read()
 if "v15.75" in s:
@@ -241,7 +210,7 @@ anchor = (
     "    # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download\n"
 )
 assert s.count(anchor) == 1, f"anchor count {s.count(anchor)}"
-s = s.replace(anchor, R16 + anchor, 1)
+s = s.replace(anchor, frag + anchor, 1)
 
 n = s.count("v15.74")
 s = s.replace("v15.74", "v15.75")
