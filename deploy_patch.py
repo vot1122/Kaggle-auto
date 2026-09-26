@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c9 (v15.83.9).
+"""One-shot patch loader: R25c10 (v15.83.10).
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c9: fixes the pymongo truth-test crash (r25c8 did
-bool(collection), which killed the leader slice and every worker at
-startup — zero songs delivered) and makes queued workers keep the
-batch open (Kaggle runs ~5 sessions at a time).
+R25c10: worker waves — Kaggle only starts ~5 sessions per account
+(leader + 4 workers); pushes beyond that never run, so workers are
+now dispatched in waves of 4, the next kernel going out when a slot
+frees. Fixes the log-4 run where w5..w10 sat unstarted and 30 songs
+never downloaded.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1k4LTHst8p-l_vEUIe89NZQc9Cb84OSBJ&export=download&confirm=t"
-EXPECT_SHA256 = "948e8f5fd869f1b1fbde147fabc987c9d2c1901a9b5d77ff38ecd21b3bac7094"
+URL = "https://drive.usercontent.google.com/download?id=1GEaQXRyTXLqwgDpgo9b-Tpv0Id5RVgMx&export=download&confirm=t"
+EXPECT_SHA256 = "38df71f9ce8c86620a98c1d2cdc51e0a2b5f083401c4989f3c9ab7d4269ce24e"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
