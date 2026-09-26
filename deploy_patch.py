@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: v15.82 -> v15.83 (Round 25).
+"""One-shot patch loader: v15.83 -> v15.83.1 (R25b hotfix).
 
 The real payload is served from Drive (uploaded byte-exact, no
 hand-copying); this downloads it, verifies its sha256, and runs it.
 
-R25: Phase B — batches with more than 6 songs fan out across
-short-lived worker Kaggle sessions (6 lanes each, own IP, cookies +
-newest yt-dlp); song-mode per-song upload fix (v15.82 downloaded
-everything but uploaded nothing); YouTube->JioSaavn fallback ladder
-with failure reasons; live progress counts; full activity logging.
+R25b: the r19 build watchdog kept the hardcoded ver = "v15.82"
+constant, so the v15.83 session killed itself minutes after boot.
+This bumps it so the deployed session stays up.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1m3Yfl9b6OP9a071Bsruxze4BUTR8Bdlb&export=download&confirm=t"
-EXPECT_SHA256 = "e667512e75c9214566ad77a698380f78ba36aee3d7fe7875ddd6325cd846ee10"
+URL = "https://drive.usercontent.google.com/download?id=1L2R573dF3D49KmVuOEGxmZ5Zm2zyA0-G&export=download&confirm=t"
+EXPECT_SHA256 = "3f17c2ec79dadab971eb7c8c95ad8c5f0c6e4a08905d02accb33e28fec3a746c"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
