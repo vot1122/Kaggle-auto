@@ -1,4 +1,4 @@
-# Source of truth for kaggle_notebook.py (v15.82).
+# Source of truth for kaggle_notebook.py (v15.83).
 # The deploy workflow downloads this before patching. Update this file
 # (and re-run deploy-version.yml) to ship a new notebook built elsewhere.
 https://drive.usercontent.google.com/download?id=1S_41l4rbZ7_fDwNDTCfEUHD0Bz2aE2iM&export=download&confirm=t
