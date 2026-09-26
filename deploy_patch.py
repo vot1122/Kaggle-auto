@@ -12,7 +12,7 @@ import hashlib
 import sys
 
 INPUT_SHA256 = "bd113d747b61aa2a6b708ce594f1ed8f6cdd515f5d0f27e61cd7b9b103c52d1b"
-EXPECT_SHA256 = "69cb53ecd67b8a3045e3330ca884016531ce6ce71a1e9ebf86a2d1aa8dec1891"
+EXPECT_SHA256 = "3f225b3bac9b80f0d1b8a246f31e58a5a0a11bbdeee328228e4e6968c68ddd8b"
 
 R22 = (
     '    # R22 (v15.81): the per-task botpm check spammed a Task Checks\n'
@@ -128,11 +128,7 @@ R23 = (
     + '            _dl23("https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip", _z23)\n'
     + '            with _zf23.ZipFile(_z23) as _z:\n'
     + '                with _z.open("deno") as _s, open(_dn23, "wb") as _f:\n'
-    + '                    while True:\n'
-    + '                        _chunk = _s.read(1 << 20)\n'
-    + '                        if not _chunk:\n'
-    + '                        break\n'
-    + '                    _f.write(_chunk)\n'
+    + '                    _f.write(_s.read())\n'
     + '            os.chmod(_dn23, 0o755)\n'
     + '            os.remove(_z23)\n'
     + '\n'
