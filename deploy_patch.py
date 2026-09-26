@@ -11,127 +11,224 @@ authenticated. Player fetches (Accept without text/html) keep the raw
 401 + X-Stream-Auth-Required flow that drives the modal.
 """
 import ast
-import base64
 import hashlib
 import sys
 
 INPUT_SHA256 = "fe1d9612f15d4af6e003a15ae02c3057a4b62796ea8e83cb3295cfbcf47ff67c"
-EXPECT_SHA256 = "9fda89db1f7c581da90c26ea017098b81e4ba967caf679202194ad11cbac0c7b"
+EXPECT_SHA256 = "81db542c80b81629e968864e59f87610fca5e6b4f7bcb7c46eab02a586476001"
 
-R16 = base64.b64decode(
-    "ICAgICMgUjE2ICh2MTUuNzUpOiBkaXJlY3QtZG93bmxvYWQgYXV0aCBwYWdlIOKAlCB3aGVuIGEgcHJvdGVjdGVkCiAgICAj"
-    "IHN0cmVhbSBsaW5rIGlzIG9wZW5lZCBkaXJlY3RseSBpbiBhIGJyb3dzZXIgKHRoZSBUZWxlZ3JhbQogICAgIyBkb3dubG9h"
-    "ZCBvcHRpb24sIC9kbC88dG9rZW4+P3VzZXI9MSksIHRoZSBwYXNzd29yZCBtb2RhbCB0aGF0CiAgICAjIGxpdmVzIGluc2lk"
-    "ZSB0aGUgcGxheWVyIHBhZ2UgbmV2ZXIgbG9hZHMsIHNvIHRoZSB1c2VyIHNhdyByYXcKICAgICMgImF1dGhlbnRpY2F0ZSBm"
-    "aXJzdCIgdGV4dC4gU2VydmUgYSBzdGFuZGFsb25lIHBhc3N3b3JkIHBhZ2UgZm9yCiAgICAjIGJyb3dzZXIgbmF2aWdhdGlv"
-    "bnM7IHRoZSBwYWdlIG1pbnRzIGEgdG9rZW4gdmlhIHRoZSBleGlzdGluZwogICAgIyAvX2F1dGggcm91dGUsIHN0b3JlcyBp"
-    "dCBpbiB0aGUgc2FtZSBsb2NhbFN0b3JhZ2Ugc2xvdCB0aGUKICAgICMgcGxheWVyIHVzZXMsIGFuZCByZWxvYWRzIHRoZSBv"
-    "cmlnaW5hbCBVUkwgYXV0aGVudGljYXRlZC4KICAgIHRyeToKICAgICAgICBfc3MxNiA9IG9zLnBhdGguam9pbihXWk1MWF9E"
-    "SVIsICJib3QvY29yZS9zdHJlYW1fc2VydmVyLnB5IikKICAgICAgICB3aXRoIG9wZW4oX3NzMTYsICJyIiwgZW5jb2Rpbmc9"
-    "InV0Zi04IikgYXMgX2Y6CiAgICAgICAgICAgIF9zMTYgPSBfZi5yZWFkKCkKICAgICAgICBpZiAiV1pGSVhfUjE2X0RMX0FV"
-    "VEgiIGluIF9zMTY6CiAgICAgICAgICAgIGxvZygiICByMTY6IGRvd25sb2FkIGF1dGggcGFnZSBhbHJlYWR5IHByZXNlbnQi"
-    "KQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIF9odG1sMTYgPSAoCiAgICAgICAgICAgICAgICAnPCFET0NUWVBFIGh0bWw+"
-    "XG4nCiAgICAgICAgICAgICAgICAnPGh0bWwgbGFuZz0iZW4iPlxuJwogICAgICAgICAgICAgICAgJzxoZWFkPlxuJyAgICAg"
-    "ICAgICAgICAgICAnPG1ldGEgY2hhcnNldD0idXRmLTgiPlxuJwogICAgICAgICAgICAgICAgJzxtZXRhIG5hbWU9InZpZXd"
-    "cG9ydCIgY29udGVudD0id2lkdGg9ZGV2aWNlLXdpZHRoLCBpbml0aWFsLXNjYWxlPTEiPlxuJwogICAgICAgICAgICAgICAg"
-    "Jzx0aXRsZT5TdHJlYW0gcGFzc3dvcmQ8L3RpdGxlPlxuJwogICAgICAgICAgICAgICAgJzxzdHlsZT5cbicKICAgICAgICAg"
-    "ICAgICAgICdib2R5e2JhY2tncm91bmQ6IzBhMGExMjtjb2xvcjojZTZlNmYwO2ZvbnQtZmFtaWx5OnN5c3RlbS11aSwtYXBw"
-    "bGUtc3lzdGVtLHNhbnMtc2VyaWY7ZGlzcGxheTpmbGV4O2FsaWduLWl0ZW1zOmNlbnRlcjtqdXN0aWZ5LWNvbnRlbnQ6Y2Vu"
-    "dGVyO21pbi1oZWlnaHQ6MTAwdmg7bWFyZ2luOjB9XG4nCiAgICAgICAgICAgICAgICAnLmNhcmR7YmFja2dyb3VuZDpyZ2Jh"
-    "KDI1NSwyNTUsMjU1LC4wNCk7Ym9yZGVyOjFweCBzb2xpZCByZ2JhKDI1NSwyNTUsMjU1LC4wOCk7Ym9yZGVyLXJhZGl1czox"
-    "NnB4O3BhZGRpbmc6Mi4ycmVtIDJyZW07d2lkdGg6bWluKDkydncsMzYwcHgpO3RleHQtYWxpZ246Y2VudGVyO2JhY2tkcm9w"
-    "LWZpbHRlcjpibHVyKDEycHgpfVxuJyAgICAgICAgICAgICAgICAnaDF7Zm9udC1zaXplOjEuMDVyZW07Zm9udC13ZWlnaHQ"
-    "OjYwMDttYXJnaW46MCAwIC40cmVtfVxuJwogICAgICAgICAgICAgICAgJ3B7Zm9udC1zaXplOi44NXJlbTtjb2xvcjojOGE4"
-    "YWEwO21hcmdpbjowIDAgMS40cmVtfVxuJwogICAgICAgICAgICAgICAgJ2lucHV0e3dpZHRoOjEwMCU7Ym94LXNpemluZzpi"
-    "b3JkZXItYm94O2JhY2tncm91bmQ6cmdiYSgwLDAsMCwuMzUpO2JvcmRlcjoxcHggc29saWQgcmdiYSgyNTUsMjU1LDI1NSwu"
-    "MTIpO2JvcmRlci1yYWRpdXM6MTBweDtjb2xvcjojZmZmO3BhZGRpbmc6Ljc1cmVtIC45cmVtO2ZvbnQtc2l6ZToxcmVtO291"
-    "dGxpbmU6bm9uZX1cbicKICAgICAgICAgICAgICAgICdpbnB1dDpmb2N1c3tib3JkZXItY29sb3I6IzdjNmNmMH1cbicKICAg"
-    "ICAgICAgICAgICAgICdidXR0b257d2lkdGg6MTAwJTttYXJnaW4tdG9wOjFyZW07YmFja2dyb3VuZDpsaW5lYXItZ3JhZGll"
-    "bnQoMTM1ZGVnLCM3YzZjZjAsIzVhOGJmMCk7Y29sb3I6I2ZmZjtib3JkZXI6bm9uZTtib3JkZXItcmFkaXVzOjEwcHg7cGFk"
-    "ZGluZzouOHJlbTtmb250LXNpemU6MXJlbTtmb250LXdlaWdodDo2MDA7Y3Vyc29yOnBvaW50ZXJ9XG4nCiAgICAgICAgICAg"
-    "ICAgICAnLm1zZ3tjb2xvcjojZjA4MDZjO2ZvbnQtc2l6ZTouOHJlbTttaW4taGVpZ2h0OjEuMXJlbTttYXJnaW4tdG9wOi44"
-    "cmVtfVxuJwogICAgICAgICAgICAgICAgJzwvc3R5bGU+XG4nCiAgICAgICAgICAgICAgICAnPC9oZWFkPlxuJyAgICAgICAg"
-    "ICAgICAgICAgICc8Ym9keT5cbicKICAgICAgICAgICAgICAgICc8ZGl2IGNsYXNzPSJjYXJkIj5cbicKICAgICAgICAgICAg"
-    "ICAgJzxoMT5UaGlzIHN0cmVhbSBpcyBwYXNzd29yZCBwcm90ZWN0ZWQ8L2gxPlxuJwogICAgICAgICAgICAgICAgJzxwPkVu"
-    "dGVyIHRoZSBzdHJlYW0gcGFzc3dvcmQgdG8gZG93bmxvYWQgb3IgcGxheSB0aGUgZmlsZS48L3A+XG4nICAgICAgICAgICAg"
-    "ICAgICAgJzwgaW5wdXQgaWQ9InB3IiB0eXBlPSJwYXNzd29yZCIgcGxhY2Vob2xkZXI9IlN0cmVhbSBwYXNzd29yZCIgYXV0b2Y"
-    "b2N1cz5cbicKICAgICAgICAgICAgICAgICc8YnV0dG9uIGlkPSJnbyI+VW5sb2NrPC9idXR0b24+XG4nICAgICAgICAgICAg"
-    "ICAgICAgJzxkaXYgY2xhc3M9Im1zZyIgaWQ9Im1zZyI+PC9kaXY+XG4nCiAgICAgICAgICAgICAgICAgJzwvZGl2PlxuJyAg"
-    "ICAgICAgICAgICAgICAgJzxzY3JpcHQ+XG4nCiAgICAgICAgICAgICAgICAgJyhmdW5jdGlvbigpe1xuJyAgICAgICAgICAg"
-    "ICAgICAnIHZhciBNPWRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJtc2ciKSxQPWRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJwdyIp"
-    "O1xuJwogICAgICAgICAgICAgICAgJ2Z1bmN0aW9uIGFwcGx5VG9rZW4odCl7XG4nCiAgICAgICAgICAgICAgICAnICB0cnl7"
-    "bG9jYWxTdG9yYWdlLnNldEl0ZW0oInd6bWxfc3RyZWFtX2F1dGgiLEpTT04uc3RyaW5naWZ5KHt0b2tlbjp0LHRzOkRhdGUu"
-    "bm93KCl9KSl9Y2F0Y2goZSl7fVxuJwogICAgICAgICAgICAgICAgJyAgdmFyIHU9bmV3IFVSTChsb2NhdGlvbi5ocmVmKTtc"
-    "bicKICAgICAgICAgICAgICAgICcgIHUuc2VhcmNoUGFyYW1zLnNldCgiYXV0aCIsdCk7XG4nCiAgICAgICAgICAgICAgICAn"
-    "ICBsb2NhdGlvbi5yZXBsYWNlKHUudG9TdHJpbmcoKSk7XG4nICAgICAgICAgICAgICAgICd9XG4nICAgICAgICAgICAgICAg"
-    "ICAgJ2Z1bmN0aW9uIHRyeVN0b3JlZCgpe1xuJyAgICAgICAgICAgICAgICAnICB0cnl7XG4nICAgICAgICAgICAgICAgICAg"
-    "ICAgIHZhciByYXc9bG9jYWxTdG9yYWdlLmdldEl0ZW0oInd6bWxfc3RyZWFtX2F1dGgiKTtcbicKICAgICAgICAgICAgICAg"
-    "ICAgICAgJyAgICBpZighcmF3KXJldHVybiBudWxsO1xuJwogICAgICAgICAgICAgICAgJyAgICB2YXIgZD1KU09OLnBhcnNlKHJhd"
-    "KTtcbicKICAgICAgICAgICAgICAgICcgICAgaWYoIWQudG9rZW58fERhdGUubm93KCktZC50cz4yNCozNjAwKjEwMDApe2xv"
-    "Y2FsU3RvcmFnZS5yZW1vdmVJdGVtKCJ3em1sX3N0cmVhbV9hdXRoIik7cmV0dXJuIG51bGx9XG4nICAgICAgICAgICAgICAg"
-    "ICAgJyAgICByZXR1cm4gZC50b2tlbjtcbicgICAgICAgICAgICAgICAgJyAgfWNhdGNoKGUpe3JldHVybiBudWxsfVxuJyAg"
-    "ICAgICAgICAgICAgICAgICd9XG4nCiAgICAgICAgICAgICAgICAgJ3ZhciBzdD10cnlTdG9yZWQoKTtcbicKICAgICAgICAg"
-    "ICAgICAgICAnaWYoc3QmJiFuZXcgVVJMKGxvY2F0aW9uLmhyZWYpLnNlYXJjaFBhcmFtcy5nZXQoImF1dGgiKSl7YXBwbHlUb2tl"
-    "bihzdCk7cmV0dXJufVxuJwogICAgICAgICAgICAgICAgJ2RvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJnbyIpLm9uY2xpY2s9"
-    "ZnVuY3Rpb24oKXtnbygpfTtcbicKICAgICAgICAgICAgICAgICdQLm9ua2V5ZG93bj1mdW5jdGlvbihlKXtpZihlLmtleT09"
-    "PSJFbnRlciIpZ28oKX07XG4nICAgICAgICAgICAgICAgICdhc3luYyBmdW5jdGlvbiBnbygpe1xuJyAgICAgICAgICAgICAg"
-    "ICAgICcgIE0udGV4dENvbnRlbnQ9IiI7XG4nCiAgICAgICAgICAgICAgICAnICB0cnl7XG4nICAgICAgICAgICAgICAgICAg"
-    "ICAgIHZhciByPWF3YWl0IGZldGNoKCIvX2F1dGgiLHttZXRob2Q6IlBPU1QiLGhlYWRlcnM6eyJDb250ZW50LVR5cGUiOiJh"
-    "cHBsaWNhdGlvbi9qc29uIn0sYm9keTpKU09OLnN0cmluZ2lmeSh7cGFzc3dvcmQ6UC52YWx1ZX0pfSk7XG4nICAgICAgICAg"
-    "ICAgICAgICAgICAgICAnICAgIHZhciBkPWF3YWl0IHIuanNvbigpO1xuJwogICAgICAgICAgICAgICAgJyAgICBpZihkLnRva2VuKXth"
-    "cHBseVRva2VuKGQudG9rZW4pfVxuJwogICAgICAgICAgICAgICAgJyAgICBlbHNle00udGV4dENvbnRlbnQ9ZC5lcnJvcnx8"
-    "Indyb25nIHBhc3N3b3JkIn1cbicKICAgICAgICAgICAgICAgICcgIH1jYXRjaChlKXtNLnRleHRDb250ZW50PSJhdXRoIHVu"
-    "YXZhaWxhYmxlLCB0cnkgdGhlIHBsYXllciBsaW5rIn1cbicgICAgICAgICAgICAgICAgICd9XG4nICAgICAgICAgICAgICAg"
-    "ICAgICAnfSkoKTtcbicKICAgICAgICAgICAgICAgICc8L3NjcmlwdD5cbicgICAgICAgICAgICAgICAgICc8L2JvZHk+XG4n'
-    "ICAgICAgICAgICAgICAgICc8L2h0bWw+XG4nICAgICAgICAgICApCiAgICAgICAgICAgIF9pbnMxNiA9ICgKICAgICAgICAg"
-    "ICAgICAgICJfRExfQVVUSF9IVE1MID0gJycnIiArIF9odG1sMTYgKyAiJycnXG5cblxuIgogICAgICAgICAgICAgICAgImRl"
-    "ZiBfZGxfYXV0aF9wYWdlKCk6ICAjIFdaRklYX1IxNl9ETF9BVVRIXG4iCiAgICAgICAgICAgICAgICAiICAgIHJldHVybiB3"
-    "ZWIuUmVzcG9uc2UoXG4iCiAgICAgICAgICAgICAgICAiICAgICAgICB0ZXh0PV9ETF9BVVRIX0hUTUwsXG4iCiAgICAgICAg"
-    "ICAgICAgICAiICAgICAgICBjb250ZW50X3R5cGU9J3RleHQvaHRtbCcsXG4iCiAgICAgICAgICAgICAgICAiICAgICAgICBz"
-    "dGF0dXM9NDAxLFxuIgogICAgICAgICAgICAgICAgIiAgICAgICAgaGVhZGVycz17XG4iCiAgICAgICAgICAgICAgICAiICAg"
-    "ICAgICAgICAgJ1gtU3RyZWFtLUF1dGgtUmVxdWlyZWQnOiAnMScsXG4iCiAgICAgICAgICAgICAgICAiICAgICAgICAgICAg"
-    "J0NhY2hlLUNvbnRyb2wnOiAnbm8tc3RvcmUnLFxuIgogICAgICAgICAgICAgICAgIiAgICAgICAgfSxcbiIKICAgICAgICAg"
-    "ICAgICAgICIgICAgKVxuIgogICAgICAgICAgICAgICAgIlxuXG4iCiAgICAgICAgICAgICAgICAiYXN5bmMgZGVmIF9zZXJ2"
-    "ZShyZXF1ZXN0LCBraW5kKToiCiAgICAgICAgICAgICkKICAgICAgICAgICAgX2dhdGUxNl9vbGQgPSAoCiAgICAgICAgICAg"
-    "ICAgICAnICAgIGlmIHJlcXVlc3QucXVlcnkuZ2V0KCJ1c2VyIikgPT0gIjEiIGFuZCBub3QgX3VzX2NoZWNrX2F1dGgocmVx"
-    "dWVzdCkgYW5kIG5vdCBhd2FpdCBfcjVfbGlua190b2tlbl9vayhyZXF1ZXN0KTpcbicgICAgICAgICAgICAgICAgICcgICIC"
-    "AgAgcmFpc2Ugd2ViLkhUVFBVbmF1dGhvcml6ZWQoXG4nCiAgICAgICAgICAgICAgICAnICAgICAgICAgICAgdGV4dD0iYXV0"
-    "aGVudGljYXRlIGZpcnN0IixcbicKICAgICAgICAgICAgICAgICcgICAgICAgICAgIGhlYWRlcnM9eyJYLVN0cmVhbS1BdS0i"
-    "OiAiMSJ9LFxuJyAgICAgICAgICAgICAgICAnICAgICAgICAgKScnICAgICAgICAgICAgICAgICcnKScgICAgICAgICAgICAg"
-    "ICAgX2dhdGUxNl9uZXcgPSAoCiAgICAgICAgICAgICAgICAnICAgICMgV1pGSVhfUjE2X0RMX0FVVEg6IGEgZGlyZWN0ICAg"
-    "ICBicm93c2VyIG9wZW4gb2YgYVxuJyAgICAgICAgICAgICAgICAnICAgICMgcHJvdGVjdGVkIHN0cmVhbSAodGhlIFRlbGVn"
-    "cmFtIGRvd25sb2FkIGxpbmspIG11c3RcbicgICAgICAgICAgICAgICAgJyAgICAjIHNlZSB0aGUgcGFzc3dvcmQgcGFnZSAi"
-    "ICAgIOKAlCB0aGUgcGFzc3dvcmQgbW9kYWwgb25seVxuJyAgICAgICAgICAgICAgICAnICAgICMgZXhpc3RzIGluc2lkZSB0"
-    "aGUgcGxheWVyIHBhZ2VcbicKICAgICAgICAgICAgICAgICcgICAgaWYgKFxuJyAgICAgICAgICAgICAgICAnICAgICAgICBy"
-    "ZXF1ZXN0LnF1ZXJ5LmdldCgidXNlciIpID09ICIxIlxuJyAgICAgICAgICAgICAgICAnICAgICAgICBhbmQgbm90IF91c19j"
-    "aGVja19hdXRoKHJlcXVlc3QpXG4nICAgICAgICAgICAgICAgICcgICAgICAgIGFuZCBub3QgYXdhaXQgX3I1X2xpbmtfdG8"
-    "a2VuX29rKHJlcXVlc3QpXG4nICAgICAgICAgICAgICAgICcgICAgKTpcbicKICAgICAgICAgICAgICAgICcgICAgICAgIGki"
-    "ZiAidGV4dC9odG1sIiBpbiAocmVxdWVzdC5oZWFkZXJzLmdldCgiQWNjZXB0Iikgb3IgIiIpOlxuJwogICAgICAgICAgICAg"
-    "ICAgJyAgICAgICAgICAgIHJldHVybiBfZGxfYXV0aF9wYWdlKClcbicKICAgICAgICAgICAgICAgICcgICAgICAgIHJhaXNl'
-    "ICB3ZWIuSFRUUFVuYXV0aG9yaXplZChcbicgICAgICAgICAgICAgICAgJyAgICAgICAgICAgIHRleHQ9ImF1dGhlbnRpY2F0"
-    "ZSBmaXJzdCIsXG4nICAgICAgICAgICAgICAgICcgICAgICAgICAgIGhlYWRlcnM9eyJYLVN0cmVhbS1BdXRoLVJlcXVpcnk"
-    "iOiAiMSJ9LFxuJyAgICAgICAgICAgICAgICAnICAgICAgICAgKSAgICAgICAgICAgICApICAgICAgICAgICAgX29rMTYgPSAw'
-    "CiAgICAgICAgICAgIGlmIF9nYXRlMTZfb2xkIGluIF9zMTY6CiAgICAgICAgICAgICAgICBfczE2ID0gX3MxNi5yZXBsYWNl"
-    "KF9nYXRlMTZfb2xkLCBfZ2F0ZTE2X25ldywgMSkKICAgICAgICAgICAgICAgIF9vazE2ICs9IDEKICAgICAgICAgICAgZWxz'
-    "ZToKICAgICAgICAgICAgICAgIGxvZygiICByMTY6IGdhdGUgYW5jaG9yIG1pc3NpbmciLCAiV0FSTiIpICAgICAgICAgICAg"
-    "ICBpZiAiYXN5bmMgZGVmIF9zZXJ2ZShyZXF1ZXN0LCBraW5kKToiIGluIF9zMTY6ICAgICAgICAgICAgICAgIF9zMTYgPSBf"
-    "czE2LnJlcGxhY2UoCiAgICAgICAgICAgICAgICAgICAgICJhc3luYyBkZWYgX3NlcnZlKHJlcXVlc3QsIGtpbmQpOiIsIF9p"
-    "bnMxNiwgMQogICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgX29rMTYgKz0gMQogICAgICAgICAgICBlbHNlOgog"
-    "ICAgICAgICAgICAgICAgIGxvZygiICByMTY6IF9zZXJ2ZSBhbmNob3IgbWlzc2luZyIsICJXQVJOIikgICAgICAgICAgICAg"
-    "ICBpZiBfb2sxNiA9PSAyOgogICAgICAgICAgICAgICAgd2l0aCBvcGVuKF9zczE2LCAidyIsIGVuY29kaW5nPSJ1dGYtIgog"
-    "OCIpIGFzIF9mOgogICAgICAgICAgICAgICAgICAgIF9mLndyaXRlKF9zMTYpICAgICAgICAgICAgICAgICAgICAgX3IxNiA9"
-    "IHN1YnByb2Nlc3MucnVuKAogICAgICAgICAgICAgICAgICAgIFtzeXMuZXhlY3V0YWJsZSwgIi1tIiwgInB5X2NvbXBpbGUi'
-    'LCBfc3MxNl0sCiAgICAgICAgICAgICAgICAgICAgY2FwdHVyZV9vdXRwdXQ9VHJ1ZSwKICAgICAgICAgICAgICAgICAgICB0'
-    'ZXh0PVRydWUsCiAgICAgICAgICAgICAgICAgICAgIHRpbWVvdXQ9NjAsCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAg'
-    'ICAgICBpZiBfcjE2LnJldHVybmNvZGUgPT0gMDoKICAgICAgICAgICAgICAgICAgICBsb2coIiAgcjE2OiBkb3dubG9hZCBh'
-    'dXRoIHBhZ2UgYXBwbGllZCIpICAgICAgICAgICAgICAgICAgIGVsc2U6CiAgICAgICAgICAgICAgICAgICAgbG9nKAogICAg'
-    'ICAgICAgICAgICAgICAgICAgICBmIiAgcjE2OiBjb21waWxlIEZBSUxFRCDigJQgIiAgICAgICAgICAgICAgICAgICAgICAg'
-    'ICAgICAgZm8ieyhfcjE2LnN0ZGVyciBvciAnJykuc3RyaXAoKVs6MjAwXX0iLAogICAgICAgICAgICAgICAgICAgICAgICAi'
-    'RVJST1IiLAogICAgICAgICAgICAgICAgICAgICAgICApCiAgICAgICAgICAgIGVsc2U6CiAgICAgICAgICAgICAgICAgIGxv'
-    'ZygiICByMTY6IGFuY2hvcnMgaW5jb21wbGV0ZSDigJQgbm90IHdyaXR0ZW4iLCAiV0FSTiIpCiAgICBleGNlcHQgRXhjZXB0'
-    'aW9uIGFzIGU6CiAgICAgICAgICAgIGxvZyhmIiAgcjE2OiBGQUlMRUQg4oCUIHtlfSIsICJFUlJPUiIpCgo="
-).decode("utf-8")
+HTML_LINES = [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '<title>Stream password</title>',
+    '<style>',
+    'body{background:#0a0a12;color:#e6e6f0;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}',
+    '.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:2.2rem 2rem;width:min(92vw,360px);text-align:center;backdrop-filter:blur(12px)}',
+    'h1{font-size:1.05rem;font-weight:600;margin:0 0 .4rem}',
+    'p{font-size:.85rem;color:#8a8aa0;margin:0 0 1.4rem}',
+    'input{width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;padding:.75rem .9rem;font-size:1rem;outline:none}',
+    'input:focus{border-color:#7c6cf0}',
+    'button{width:100%;margin-top:1rem;background:linear-gradient(135deg,#7c6cf0,#5a8bf0);color:#fff;border:none;border-radius:10px;padding:.8rem;font-size:1rem;font-weight:600;cursor:pointer}',
+    '.msg{color:#f0806c;font-size:.8rem;min-height:1.1rem;margin-top:.8rem}',
+    '</style>',
+    '</head>',
+    '<body>',
+    '<div class="card">',
+    '<h1>This stream is password protected</h1>',
+    '<p>Enter the stream password to download or play the file.</p>',
+    '<input id="pw" type="password" placeholder="Stream password" autofocus>',
+    '<button id="go">Unlock</button>',
+    '<div class="msg" id="msg"></div>',
+    '</div>',
+    '<script>',
+    '(function(){',
+    'var M=document.getElementById("msg"),P=document.getElementById("pw");',
+    'function applyToken(t){',
+    '  try{localStorage.setItem("wzml_stream_auth",JSON.stringify({token:t,ts:Date.now()}))}catch(e){}',
+    '  var u=new URL(location.href);',
+    '  u.searchParams.set("auth",t);',
+    '  location.replace(u.toString());',
+    '}',
+    'function tryStored(){',
+    '  try{',
+    '    var raw=localStorage.getItem("wzml_stream_auth");',
+    '    if(!raw)return null;',
+    '    var d=JSON.parse(raw);',
+    '    if(!d.token||Date.now()-d.ts>24*3600*1000){localStorage.removeItem("wzml_stream_auth");return null}',
+    '    return d.token;',
+    '  }catch(e){return null}',
+    '}',
+    'var st=tryStored();',
+    'if(st&&!new URL(location.href).searchParams.get("auth")){applyToken(st);return}',
+    'document.getElementById("go").onclick=function(){go()};',
+    'P.onkeydown=function(e){if(e.key==="Enter")go()};',
+    'async function go(){',
+    '  M.textContent="";',
+    '  try{',
+    '    var r=await fetch("/_auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:P.value})});',
+    '    var d=await r.json();',
+    '    if(d.token){applyToken(d.token)}',
+    '    else{M.textContent=d.error||"wrong password"}',
+    '  }catch(e){M.textContent="auth unavailable, try the player link"}',
+    '}',
+    '})();',
+    '</script>',
+    '</body>',
+    '</html>',
+]
+
+GATE_OLD_LINES = [
+    '    if request.query.get("user") == "1" and not _us_check_auth(request) and not await _r5_link_token_ok(request):',
+    '        raise web.HTTPUnauthorized(',
+    '            text="authenticate first",',
+    '            headers={"X-Stream-Auth-Required": "1"},',
+    '        )',
+]
+
+GATE_NEW_LINES = [
+    '    # WZFIX_R16_DL_AUTH: a direct browser open of a',
+    '    # protected stream (the Telegram download link) must',
+    '    # see the password page - the password modal only',
+    '    # exists inside the player page',
+    '    if (',
+    '        request.query.get("user") == "1"',
+    '        and not _us_check_auth(request)',
+    '        and not await _r5_link_token_ok(request)',
+    '    ):',
+    '        if "text/html" in (request.headers.get("Accept") or ""):',
+    '            return _dl_auth_page()',
+    '        raise web.HTTPUnauthorized(',
+    '            text="authenticate first",',
+    '            headers={"X-Stream-Auth-Required": "1"},',
+    '        )',
+]
+
+
+def chunks(lines, indent):
+    return "".join(indent + "'" + ln + "\\n'\n" for ln in lines)
+
+
+R16 = (
+    "    # R16 (v15.75): direct-download auth page. When a protected\n"
+    "    # stream link is opened directly in a browser (the Telegram\n"
+    "    # download option, /dl/<token>?user=1), the password modal that\n"
+    "    # lives inside the player page never loads, so the user saw raw\n"
+    "    # authenticate-first text. Browser navigations now get a standalone\n"
+    "    # password page: it mints a token via the existing /_auth route,\n"
+    "    # stores it in the same localStorage slot the player uses, and\n"
+    "    # reloads the original URL authenticated. Player fetches keep the\n"
+    "    # raw 401 + X-Stream-Auth-Required flow that drives the modal.\n"
+    "    try:\n"
+    '        _ss16 = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")\n'
+    '        with open(_ss16, "r", encoding="utf-8") as _f:\n'
+    "            _s16 = _f.read()\n"
+    '        if "WZFIX_R16_DL_AUTH" in _s16:\n'
+    '            log("  r16: download auth page already present")\n'
+    "        else:\n"
+    "            _html16 = (\n"
+    + chunks(HTML_LINES, "                ")
+    + "            )\n"
+    "            _t16 = chr(39) * 3\n"
+    "            _q16 = chr(34)\n"
+    "            _ins16 = (\n"
+    '                "_DL_AUTH_HTML = " + _t16 + _html16 + _t16 + "\\n\\n\\n"\n'
+    '                "def _dl_auth_page():  # WZFIX_R16_DL_AUTH\\n"\n'
+    '                "    return web.Response(\\n"\n'
+    '                "        text=_DL_AUTH_HTML,\\n"\n'
+    '                "        content_type="'
+    " + _q16 + "
+"
+    '"text/html"'
+    " + _q16 + "
+"
+    '",\\n"\n'
+    '                "        status=401,\\n"\n'
+    '                "        headers={\\n"\n'
+    '                "            "'
+    " + _q16 + "
+"
+    '"X-Stream-Auth-Required"'
+    " + _q16 + "
+"
+    '": "'
+    " + _q16 + "
+"
+    '"1"'
+    " + _q16 + "
+"
+    '",\\n"\n'
+    '                "            "'
+    " + _q16 + "
+"
+    '"Cache-Control"'
+    " + _q16 + "
+"
+    '": "'
+    " + _q16 + "
+"
+    '"no-store"'
+    " + _q16 + "
+"
+    '",\\n"\n'
+    '                "        },\\n"\n'
+    '                "    )\\n"\n'
+    '                "\\n\\n"\n'
+    '                "async def _serve(request, kind):"\n'
+    "            )\n"
+    "            _gate16_old = (\n"
+    + chunks(GATE_OLD_LINES, "                ")
+    + "            )\n"
+    "            _gate16_new = (\n"
+    + chunks(GATE_NEW_LINES, "                ")
+    + "            )\n"
+    "            _ok16 = 0\n"
+    "            if _gate16_old in _s16:\n"
+    "                _s16 = _s16.replace(_gate16_old, _gate16_new, 1)\n"
+    "                _ok16 += 1\n"
+    "            else:\n"
+    '                log("  r16: gate anchor missing", "WARN")\n'
+    '            if "async def _serve(request, kind):" in _s16:\n'
+    "                _s16 = _s16.replace(\n"
+    '                    "async def _serve(request, kind):", _ins16, 1\n'
+    "                )\n"
+    "                _ok16 += 1\n"
+    "            else:\n"
+    '                log("  r16: _serve anchor missing", "WARN")\n'
+    "            if _ok16 == 2:\n"
+    '                with open(_ss16, "w", encoding="utf-8") as _f:\n'
+    "                    _f.write(_s16)\n"
+    "                _r16 = subprocess.run(\n"
+    '                    [sys.executable, "-m", "py_compile", _ss16],\n'
+    "                    capture_output=True,\n"
+    "                    text=True,\n"
+    "                    timeout=60,\n"
+    "                )\n"
+    "                if _r16.returncode == 0:\n"
+    '                    log("  r16: download auth page applied")\n'
+    "                else:\n"
+    "                    log(\n"
+    '                        "  r16: compile FAILED: "\n'
+    '                        + f"'
+    '{(_r16.stderr or ' + "''" + ').strip()[:200]}' + '",' + "\n"
+    "                    )\n"
+    "            else:\n"
+    '                log("  r16: anchors incomplete - not written", "WARN")\n'
+    "    except Exception as e:\n"
+    '        log(f"  r16: FAILED - {e}", "ERROR")\n'
+    "\n"
+)
+
 ast.parse("def _wrap():\n" + R16 + "\n")
+bad = [i for i, ln in enumerate(R16.splitlines(), 1) if chr(92) + chr(34) in ln or chr(92) + chr(39) in ln]
+assert not bad, bad
+print("R16 fragment: syntax OK, zero backslash-quote sequences")
+
+ast.parse("def _wrap():\n" + R16 + "\n")
+bad = [ln for ln in R16.splitlines() if chr(92) + chr(34) in ln or chr(92) + chr(39) in ln]
+assert not bad, "escaped-quote sequences found"
 
 s = open("kaggle_notebook.py", encoding="utf-8").read()
 if "v15.75" in s:
