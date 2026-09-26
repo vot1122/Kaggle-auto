@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.74  (artist batch fixes: arg order + slash + owner)
+ WZFIX BUILD: v15.75  (artist batch fixes: arg order + slash + owner)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -2257,7 +2257,7 @@ WZFIX_R4_CMDS_B64 = (
 
 # bot/modules/wzfix_admin.py — Telegram commands: /find /usage /qusers
 # /setcap /addcap /resetcap /botcap /dbstats /dbclean
-# WZFIX Round 5 (v15.74) — per-link stream passwords.
+# WZFIX Round 5 (v15.75) — per-link stream passwords.
 WZFIX_R5_STREAMPASS_B64 = (
     "IiIiV1pGSVggUm91bmQgNSAodjE1LjYyKSDigJQgcGVyLWxpbmsgc3RyZWFtIHBhc3N3b3Jkcy4KCkV2ZXJ5IHN0cmVhbSBsaW5r"
     "ICgvc3RyZWFtLzx0b2tlbj4sIC9kbC88dG9rZW4+KSBjYW4gY2FycnkgaXRzIG93bgpwYXNzd29yZCwgcmVwbGFjaW5nIHRoZSBz"
@@ -4169,7 +4169,7 @@ def apply_userrepo_patches():
         log(f"  auth bridge (wserver): FAILED — {e}", "ERROR")
     log(f"  auth bridge: v15.6 live-password proxy applied ({ok_h}/3 edits)")
 
-    # Kaggle addition K — v15.74 Round 5: per-link stream passwords.
+    # Kaggle addition K — v15.75 Round 5: per-link stream passwords.
     # A stream link (/stream/<token>) can carry its own password in
     # MongoDB; it then stops accepting the global STREAM_PASS. The
     # serve/meta gates, the auth API and the password modal all learn
@@ -4343,7 +4343,7 @@ def apply_userrepo_patches():
             hd5 = f.read()
         if "wzfix_streampass" not in hd5:
             hd5 += (
-                '\n    # WZFIX r5 streampass (v15.74)\n'
+                '\n    # WZFIX r5 streampass (v15.75)\n'
                 '    from ..helper.wzfix.r5_streampass import wzfix_streampass\n'
                 '    TgClient.bot.add_handler(\n'
                 '        MessageHandler(\n'
@@ -4368,7 +4368,7 @@ def apply_userrepo_patches():
         log(f"  r5 handlers FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition R8 — v15.74: per-link pass user-gate fix (loop).
+    # Kaggle addition R8 — v15.75: per-link pass user-gate fix (loop).
     # The ?user=1 gates only accepted tokens signed with the GLOBAL
     # STREAM_PASS, so a link unlocked with its own per-link password
     # reloaded into the password prompt forever. Also, addition K's
@@ -4468,7 +4468,7 @@ def apply_userrepo_patches():
             _anchor = "# ─── owner command ─────────────────────────────────────────────────"
             _ins = (
                 "\n\nasync def link_token_ok(request):\n"
-                "    \"\"\"WZFIX Round 8 (v15.74): True only when THIS link has a custom\n"
+                "    \"\"\"WZFIX Round 8 (v15.75): True only when THIS link has a custom\n"
                 "    password AND the request's ?auth= token verifies against it.\n"
                 "\n"
                 "    Why: the ?user=1 gate in stream_server checks the token against\n"
@@ -4513,7 +4513,7 @@ def apply_userrepo_patches():
         log(f"  r8: r5_streampass FAILED — {e}", "ERROR")
 
 
-    # Kaggle addition M — v15.74 Round 6: /start user registry.
+    # Kaggle addition M — v15.75 Round 6: /start user registry.
     # Every /start sender is recorded in wzfix_startusers so the owner
     # can see and manage them from the dashboard (authorize / sudo /
     # block toggles live in r2_web).
@@ -4585,7 +4585,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6 services FAILED — {e}", "ERROR")
 
-    # Kaggle addition N — v15.74 Round 6b: stream page auth-loop fix.
+    # Kaggle addition N — v15.75 Round 6b: stream page auth-loop fix.
     # The stream page sent its boot probe and the video/download src
     # WITHOUT the auth token for normal (non-user) links, so a correct
     # password just reloaded into the same 401 — an endless password
@@ -4678,6 +4678,159 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r6b FAILED — {e}", "ERROR")
 
+    # R16 (v15.75): direct-download auth page. When a protected
+    # stream link is opened directly in a browser (the Telegram
+    # download option, /dl/<token>?user=1), the password modal that
+    # lives inside the player page never loads, so the user saw raw
+    # authenticate-first text. Browser navigations now get a standalone
+    # password page: it mints a token via the existing /_auth route,
+    # stores it in the same localStorage slot the player uses, and
+    # reloads the original URL authenticated. Player fetches keep the
+    # raw 401 + X-Stream-Auth-Required flow that drives the modal.
+    try:
+        _ss16 = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
+        with open(_ss16, "r", encoding="utf-8") as _f:
+            _s16 = _f.read()
+        if "WZFIX_R16_DL_AUTH" in _s16:
+            log("  r16: download auth page already present")
+        else:
+            _html16 = (
+                '<!DOCTYPE html>\n'
+                '<html lang="en">\n'
+                '<head>\n'
+                '<meta charset="utf-8">\n'
+                '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+                '<title>Stream password</title>\n'
+                '<style>\n'
+                'body{background:#0a0a12;color:#e6e6f0;font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}\n'
+                '.card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:2.2rem 2rem;width:min(92vw,360px);text-align:center;backdrop-filter:blur(12px)}\n'
+                'h1{font-size:1.05rem;font-weight:600;margin:0 0 .4rem}\n'
+                'p{font-size:.85rem;color:#8a8aa0;margin:0 0 1.4rem}\n'
+                'input{width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#fff;padding:.75rem .9rem;font-size:1rem;outline:none}\n'
+                'input:focus{border-color:#7c6cf0}\n'
+                'button{width:100%;margin-top:1rem;background:linear-gradient(135deg,#7c6cf0,#5a8bf0);color:#fff;border:none;border-radius:10px;padding:.8rem;font-size:1rem;font-weight:600;cursor:pointer}\n'
+                '.msg{color:#f0806c;font-size:.8rem;min-height:1.1rem;margin-top:.8rem}\n'
+                '</style>\n'
+                '</head>\n'
+                '<body>\n'
+                '<div class="card">\n'
+                '<h1>This stream is password protected</h1>\n'
+                '<p>Enter the stream password to download or play the file.</p>\n'
+                '<input id="pw" type="password" placeholder="Stream password" autofocus>\n'
+                '<button id="go">Unlock</button>\n'
+                '<div class="msg" id="msg"></div>\n'
+                '</div>\n'
+                '<script>\n'
+                '(function(){\n'
+                'var M=document.getElementById("msg"),P=document.getElementById("pw");\n'
+                'function applyToken(t){\n'
+                '  try{localStorage.setItem("wzml_stream_auth",JSON.stringify({token:t,ts:Date.now()}))}catch(e){}\n'
+                '  var u=new URL(location.href);\n'
+                '  u.searchParams.set("auth",t);\n'
+                '  location.replace(u.toString());\n'
+                '}\n'
+                'function tryStored(){\n'
+                '  try{\n'
+                '    var raw=localStorage.getItem("wzml_stream_auth");\n'
+                '    if(!raw)return null;\n'
+                '    var d=JSON.parse(raw);\n'
+                '    if(!d.token||Date.now()-d.ts>24*3600*1000){localStorage.removeItem("wzml_stream_auth");return null}\n'
+                '    return d.token;\n'
+                '  }catch(e){return null}\n'
+                '}\n'
+                'var st=tryStored();\n'
+                'if(st&&!new URL(location.href).searchParams.get("auth")){applyToken(st);return}\n'
+                'document.getElementById("go").onclick=function(){go()};\n'
+                'P.onkeydown=function(e){if(e.key==="Enter")go()};\n'
+                'async function go(){\n'
+                '  M.textContent="";\n'
+                '  try{\n'
+                '    var r=await fetch("/_auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:P.value})});\n'
+                '    var d=await r.json();\n'
+                '    if(d.token){applyToken(d.token)}\n'
+                '    else{M.textContent=d.error||"wrong password"}\n'
+                '  }catch(e){M.textContent="auth unavailable, try the player link"}\n'
+                '}\n'
+                '})();\n'
+                '</script>\n'
+                '</body>\n'
+                '</html>\n'
+            )
+            _t16 = chr(39) * 3
+            _q16 = chr(34)
+            _tph16 = chr(37) + chr(84) + chr(37)
+            _qph16 = chr(37) + chr(81) + chr(37)
+            _nph16 = chr(37) + chr(78) + chr(37)
+            _page16 = (
+                "_DL_AUTH_HTML = %T%" + _html16 + "%T%%N%%N%%N%"
+                "def _dl_auth_page():  # WZFIX_R16_DL_AUTH%N%"
+                "    return web.Response(%N%"
+                "        text=_DL_AUTH_HTML,%N%"
+                "        content_type=%Q%text/html%Q%,%N%"
+                "        status=401,%N%"
+                "        headers={%N%"
+                "            %Q%X-Stream-Auth-Required%Q%: %Q%1%Q%,%N%"
+                "            %Q%Cache-Control%Q%: %Q%no-store%Q%,%N%"
+                "        },%N%"
+                "    )%N%"
+                "%N%%N%"
+                "async def _serve(request, kind):"
+            ).replace(_tph16, _t16).replace(_qph16, _q16).replace(_nph16, chr(10))
+            _gate16_old = (
+                '    if request.query.get("user") == "1" and not _us_check_auth(request) and not await _r5_link_token_ok(request):\n'
+                '        raise web.HTTPUnauthorized(\n'
+                '            text="authenticate first",\n'
+                '            headers={"X-Stream-Auth-Required": "1"},\n'
+                '        )\n'
+            )
+            _gate16_new = (
+                '    # WZFIX_R16_DL_AUTH: a direct browser open of a\n'
+                '    # protected stream (the Telegram download link) must\n'
+                '    # see the password page - the password modal only\n'
+                '    # exists inside the player page\n'
+                '    if (\n'
+                '        request.query.get("user") == "1"\n'
+                '        and not _us_check_auth(request)\n'
+                '        and not await _r5_link_token_ok(request)\n'
+                '    ):\n'
+                '        if "text/html" in (request.headers.get("Accept") or ""):\n'
+                '            return _dl_auth_page()\n'
+                '        raise web.HTTPUnauthorized(\n'
+                '            text="authenticate first",\n'
+                '            headers={"X-Stream-Auth-Required": "1"},\n'
+                '        )\n'
+            )
+            _ok16 = 0
+            if _gate16_old in _s16:
+                _s16 = _s16.replace(_gate16_old, _gate16_new, 1)
+                _ok16 += 1
+            else:
+                log("  r16: gate anchor missing", "WARN")
+            if "async def _serve(request, kind):" in _s16:
+                _s16 = _s16.replace(
+                    "async def _serve(request, kind):", _page16, 1
+                )
+                _ok16 += 1
+            else:
+                log("  r16: _serve anchor missing", "WARN")
+            if _ok16 == 2:
+                with open(_ss16, "w", encoding="utf-8") as _f:
+                    _f.write(_s16)
+                _r16 = subprocess.run(
+                    [sys.executable, "-m", "py_compile", _ss16],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if _r16.returncode == 0:
+                    log("  r16: download auth page applied")
+                else:
+                    log("  r16: compile FAILED: see the boot log", "ERROR")
+            else:
+                log("  r16: anchors incomplete - not written", "WARN")
+    except Exception as e:
+        log(f"  r16: FAILED - {e}", "ERROR")
+
     # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
     # library, owner cap commands, and DB stats/cleanup.
     # Two new self-contained modules are written into the tree; three small
@@ -4704,12 +4857,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.74"\n'
+                'WZFIX_BUILD = "v15.75"\n'
                 'WZFIX_DATE = "25 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
-        log("  r1: versions.py written (v15.74 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.74 running")
+        log("  r1: versions.py written (v15.75 — shows in /log boot banner)")
+        log("  WZFIX BUILD v15.75 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -4936,7 +5089,7 @@ async def _wzfix_record_start(message):
                 '    TgClient.bot.add_handler(\n'
                 '        CallbackQueryHandler(wzfix_cancel_cb, filters=regex("^wzfixcancel$"))\n'
                 '    )\n'
-                '    # WZFIX r11 (v15.74): artist-batch playlist button\n'
+                '    # WZFIX r11 (v15.75): artist-batch playlist button\n'
                 '    from ..helper.wzfix.r3_music import wzfix_pl_go\n'
                 '    TgClient.bot.add_handler(\n'
                 '        CallbackQueryHandler(wzfix_pl_go, filters=regex("^wzfxpl:"))\n'
@@ -4987,7 +5140,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: r2_web.py FAILED — {e}", "ERROR")
 
-    # Kaggle addition O — v15.74 Round 9: dashboard reliability fixes
+    # Kaggle addition O — v15.75 Round 9: dashboard reliability fixes
     # (login form always visible — no more black page, connection banner
     # with auto-retry, no-flicker section updates, history diff,
     # no-store headers) + stream auth loop-breaker with diagnostics +
@@ -5372,7 +5525,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r9: wserver patch FAILED — {e}", "ERROR")
 
-    # J-31: silent cmd-message fallback (v15.74) — the uploader's
+    # J-31: silent cmd-message fallback (v15.75) — the uploader's
     # "Deleted Cmd Message! Don't delete the cmd message again!" warning
     # fires for EVERY fan-out clone (clones carry fake message ids the
     # chat never had), so artist batches spam it. Fall back silently to
@@ -5432,7 +5585,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-31 patch FAILED — {e}", "ERROR")
 
-    # J-32: deterministic fan-out merge (v15.74) — artist-batch clones
+    # J-32: deterministic fan-out merge (v15.75) — artist-batch clones
     # move their song into the leader's folder and finish quietly;
     # only the task that finishes last uploads, so every song reaches
     # the chat exactly once (this replaces the fragile upstream
@@ -5516,7 +5669,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-32 patch FAILED — {e}", "ERROR")
 
-    # J-33: single-copy DM (v15.74) — with BOT_PM on and the batch
+    # J-33: single-copy DM (v15.75) — with BOT_PM on and the batch
     # running in the user's DM, every song was sent to the DM twice
     # (upload reply + PM copy). Music batches keep just the reply.
     try:
@@ -5567,7 +5720,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-33 patch FAILED — {e}", "ERROR")
 
-    # J-34: m4a passthrough (v15.74) — every song was transcoded to
+    # J-34: m4a passthrough (v15.75) — every song was transcoded to
     # mp3 (aac -> mp3 re-encode: CPU-bound and quality-losing). Music
     # now downloads YouTube's native m4a audio and copies it into the
     # container (no transcode): faster, lighter and better quality.
@@ -6958,7 +7111,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-23 patch FAILED — {e}", "ERROR")
 
-    # J-30: quiet music fan-out (v15.74) — artist batches keep the chat
+    # J-30: quiet music fan-out (v15.75) — artist batches keep the chat
     # clean: no per-song "Downloaded! Waiting..." or per-song error
     # messages (the artist note tracks progress), a compact file list
     # with one line per song, and the uploaded songs collected for the
@@ -6974,7 +7127,7 @@ async def _wzfix_record_start(message):
                 '        await send_message(self.message, '
                 'f"{self.tag} {escape(str(error))}")'
             )
-            _new30a = r'''        # WZFIX r11 quiet fan-out (v15.74): artist batches track
+            _new30a = r'''        # WZFIX r11 quiet fan-out (v15.75): artist batches track
         # progress in one note — no per-song messages
         _wzfix_quiet = False
         try:
@@ -6992,7 +7145,7 @@ async def _wzfix_record_start(message):
             _old30b = (
                 '        await send_message(self.message, msg, button)'
             )
-            _new30b = r'''        # WZFIX r11 quiet fan-out (v15.74): failed songs are
+            _new30b = r'''        # WZFIX r11 quiet fan-out (v15.75): failed songs are
         # folded into the artist note
         _wzfix_quiet = False
         try:
@@ -7018,7 +7171,7 @@ async def _wzfix_record_start(message):
         if not _wzfix_quiet:
             await send_message(self.message, msg, button)'''
             _old30c = "                    if Config.MEDIA_STORE and ("
-            _new30c = r'''                    # WZFIX r11 quiet fan-out (v15.74): one compact
+            _new30c = r'''                    # WZFIX r11 quiet fan-out (v15.75): one compact
                     # line per song, and every uploaded song recorded
                     # for the playlist prompt
                     try:
@@ -7457,7 +7610,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r2: J-28 patch FAILED — {e}", "ERROR")
 
-    # J-29: music keep-chat (v15.74) — hyper uploads of music zips go to
+    # J-29: music keep-chat (v15.75) — hyper uploads of music zips go to
     # LEECH_LOG_CHAT, hiding the delivered zip from the user's chat;
     # music files must stay in the chat where they were requested
     try:
@@ -7472,7 +7625,7 @@ async def _wzfix_record_start(message):
                 " and up_size > 10 * 1024 * 1024"
             )
             _new = (
-                "            # WZFIX music keep-chat (v15.74): the hyper"
+                "            # WZFIX music keep-chat (v15.75): the hyper"
                 " pool routes\n"
                 "            # >10MB files to LEECH_LOG_CHAT, which hides"
                 " the delivered\n"
