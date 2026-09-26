@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c4 (v15.83.4).
+"""One-shot patch loader: R25c5 (v15.83.5).
 
 The real payload is served from Drive (uploaded byte-exact, no
 hand-copying); this downloads it, verifies its sha256, and runs it.
 
-R25c4: worker push metadata omits id_no - Kaggle's push API wants
-the numeric kernel id there (or nothing for a new kernel); push by
-slug only, like the repo's own kernel-metadata.json.
+R25c5: (1) worker config-path resolution for API-created kernels'
+nested dataset mount layout; (2) workers deliver songs to the chat
+the command was issued in.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1SBLjqfVRNiV_uux7SA6IbbmQrq-DNtHL&export=download&confirm=t"
-EXPECT_SHA256 = "f838c01bc24212af5ce64f6d599aba11029708874b6cc18af11d826bc6b9502b"
+URL = "https://drive.usercontent.google.com/download?id=18OMvCbRXg0jjGnZs09G9iFkiO5oI1Ov1&export=download&confirm=t"
+EXPECT_SHA256 = "f645fe9a165b6ebd6a99c3235d45bb66f362feccd2d0bcaa34dd34fa8a8bb09f"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
