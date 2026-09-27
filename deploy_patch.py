@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c12 (v15.83.12).
+"""One-shot patch loader: R25c13 (v15.83.13).
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c12: wave slot-race fix + errored-worker requeue, and playlist
-playback via the user account (helper bots can't read the songs
-the main bot posted — the user-session fallback now covers that).
+R25c13: pipelined parallel uploads (each song uploads the moment its
+download finishes), retry-with-wait on errors, and live per-song
+status on the catalog card (downloading / uploading / waiting with
+reason / uploaded / failed with reason).
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1DOh7Ufu-uE4vb9LqUYCp5L-5DqV4Lj7U&export=download&confirm=t"
-EXPECT_SHA256 = "6be2eac1fb16c150163e9ba49c0fe6f4c241bb6e8a1f917a81d635f906ad988d"
+URL = "https://drive.usercontent.google.com/download?id=1GQCQ_Bqui-EIO0Ds7berFMjBZtQOnw-2&export=download&confirm=t"
+EXPECT_SHA256 = "a88a2ba7c7d40de8cd82422ebecb739a3a1685bfb28e142ac0220d9c1c47b92d"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
