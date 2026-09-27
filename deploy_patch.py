@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c10 (v15.83.10).
+"""One-shot patch loader: R25c11 (v15.83.11).
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c10: worker waves — Kaggle only starts ~5 sessions per account
-(leader + 4 workers); pushes beyond that never run, so workers are
-now dispatched in waves of 4, the next kernel going out when a slot
-frees. Fixes the log-4 run where w5..w10 sat unstarted and 30 songs
-never downloaded.
+R25c11: playlist fixes — the callback's ext_utils import pointed at
+bot.ext_utils (it's bot/helper/ext_utils in WZML-X wzv3), and the
+workers' final consistency pass wiped the stored message ids right
+before the playlist was built (why the prompt offered only 6 of 67
+songs).
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1GEaQXRyTXLqwgDpgo9b-Tpv0Id5RVgMx&export=download&confirm=t"
-EXPECT_SHA256 = "38df71f9ce8c86620a98c1d2cdc51e0a2b5f083401c4989f3c9ab7d4269ce24e"
+URL = "https://drive.usercontent.google.com/download?id=1iA5CpQ_iy6AgFelPFQJ1P1_np75nWvBm&export=download&confirm=t"
+EXPECT_SHA256 = "c54e475aa997900086dccccddfe980118751f380b11c44aaf33685e123a2dc1c"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
