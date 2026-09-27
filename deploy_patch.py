@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c15 (v15.83.15).
+"""One-shot patch loader: R25c16 (v15.83.16).
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c15: playlist playback — per-chat user-account stickiness (the
-first user-account stream marks the chat; all later streams and
-probes for it skip the bots) + playlist page mini-player that
-auto-advances and buffers the next song ~30 s before the current
-one ends.
+R25c16: playlist playback FIX (r25c12/r25c15 silently skipped
+because patch7_user is retired - the new fallback uses the kit's
+own user-session functions, no dependency) + worker pipeline
+revert (all downloads first, then uploads one by one in order,
+downloads of all workers start together).
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1ecNvBgTV8rA6RHQwPU1EDwJp_JUlQ1nO&export=download&confirm=t"
-EXPECT_SHA256 = "824921409208247b29588c06803c6651c39c366549b13fc94a691ba07ba51e6c"
+URL = "https://drive.usercontent.google.com/download?id=1g7k3o_7KSX8W5fWZLgvMVoBC_HS8dcy0&export=download&confirm=t"
+EXPECT_SHA256 = "80ebf9b38a9b6d62522a3f92aca1d7b585ef18d94057bfa361e60ca13c8df396"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
