@@ -22,8 +22,12 @@ jobs:
           echo '===== kernel status ====='
           curl -sS -m 20 -u "$KAGGLE_USERNAME:$KAGGLE_KEY" "https://www.kaggle.com/api/v1/kernels/status?user_name=djoshi7&kernel_slug=wzml-x" || true
           echo
+          echo '===== my datasets (permission probe) ====='
+          kaggle datasets list --mine 2>&1 | head -10 || true
+          echo '===== dataset status ====='
+          kaggle datasets status djoshi7/wzmlx-logs 2>&1 || true
           echo '===== dataset download ====='
-          kaggle datasets download djoshi7/wzmlx-logs -p /tmp/logs --unzip -o || true
+          kaggle datasets download djoshi7/wzmlx-logs -p /tmp/logs --unzip -o 2>&1 || true
           ls -la /tmp/logs
           echo '===== bundle.json ====='
           cat /tmp/logs/bundle.json 2>/dev/null || echo 'bundle.json not found - dataset not created yet (kernel not booted or shipper failed)'
