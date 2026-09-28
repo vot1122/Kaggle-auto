@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c20 (v15.83.20) — hotfix.
+"""One-shot patch loader: R25c21 (v15.83.21) — player v4.
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c20: [hidden]-attribute CSS override fix — the shortcuts
-overlay and the selection/resume pills now actually hide.
+R25c21: player v4 (cover-color theme, queue panel, grid view,
+sort, favorites, +-10s skips, aurora) + playlists library v2.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1MaUvMK5GpPj2Mjj4o8CAaXxD7I1F90ub&export=download&confirm=t"
-EXPECT_SHA256 = "7e15ff7d35dd9b5666b1730b84ea8e08cea10f96d172c59d132433de0a3d81b8"
+URL = "https://drive.usercontent.google.com/download?id=1YnhRuiHh6ndlh--5PziwOcIPT7-1twYZ&export=download&confirm=t"
+EXPECT_SHA256 = "2173bb45ab18205e85091fa5dd0750b0694c4667cd610758dedeea5fc83bfd9f"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
