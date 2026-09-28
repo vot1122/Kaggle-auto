@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.83.30  (log everything + self-serve logs)
+ WZFIX BUILD: v15.83.31  (log everything + self-serve logs)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v15.83.30"
+    ver = "v15.83.31"
 
     def _r19_poll():
         import time as _r19t
@@ -6496,12 +6496,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.83.30"\n'
+                'WZFIX_BUILD = "v15.83.31"\n'
                 'WZFIX_DATE = "26 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
         log("  r1: versions.py written (v15.83.16 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.83.30 running")
+        log("  WZFIX BUILD v15.83.31 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -11903,7 +11903,7 @@ def main():
                     ss = "(ss failed)"
                 bundle = {
                     "ts": now_ist_str(),
-                    "version": "v15.83.30",
+                    "version": "v15.83.31",
                     "tunnel": tunnel_url,
                     "kernel_log": "\n".join(_LOG_RING[-400:]),
                     "wserver_log": _tail(os.path.join(KAGGLE_WORKING, "wserver.log"), 400),
@@ -11954,6 +11954,147 @@ def main():
                 last_err = repr(_e)
 
     threading.Thread(target=_r29_log_shipper, daemon=True).start()  # WZFIX r25c29
+
+    # ------------------------------------------------------------------
+    # Step 6.8: WZFIX r25c31 - fallback web server. While gunicorn is
+    # dead, the notebook serves /_diag/logs and a maintenance page on
+    # port 8080 itself, so the tunnel/worker path stays alive and logs
+    # stay fetchable from outside. Every ~6.5 min the port is released
+    # for 90 s so gunicorn restarts (r25c28 watchdog) can rebind.
+    # ------------------------------------------------------------------
+    def _r31_fallback_web():  # WZFIX r25c31
+        import http.server as _hs31
+        import socket as _sk31
+        import threading as _th31
+        import time as _t31
+
+        _KEY31 = "__WZFIX_DIAG_KEY__"
+
+        def _ring31():
+            try:
+                return "\n".join(list(_LOG_RING)[-400:])
+            except Exception:
+                return "(ring unavailable)"
+
+        def _tail31(path, n):
+            try:
+                with open(path, "r", errors="replace") as f:
+                    return "\n".join(f.read().splitlines()[-n:])
+            except Exception as e:
+                return "(unreadable: " + repr(e) + ")"
+
+        def _alive31():
+            try:
+                s = _sk31.create_connection(("127.0.0.1", 8080), timeout=2)
+                s.close()
+                return True
+            except Exception:
+                return False
+
+        class _H31(_hs31.BaseHTTPRequestHandler):
+            server_version = "wzfix-fallback/31"
+
+            def _send31(self, code, body, ctype="application/json"):
+                data = body.encode("utf-8", "replace")
+                self.send_response(code)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+
+            def do_GET(self):
+                import json as _j31
+                import subprocess as _sp31
+                import time as _t31b
+
+                path = self.path.split("?")[0]
+                key = None
+                if "?" in self.path:
+                    for part in self.path.split("?", 1)[1].split("&"):
+                        if part.startswith("key="):
+                            key = part[4:]
+                if key is None:
+                    key = self.headers.get("X-Diag-Key")
+                if path == "/_diag/logs":
+                    if key != _KEY31:
+                        self._send31(401, '{"error": "unauthorized"}')
+                        return
+                    ps = ""
+                    try:
+                        ps = _sp31.run(
+                            ["ps", "-eo", "pid,etimes,cmd"],
+                            capture_output=True, text=True, timeout=15,
+                        ).stdout
+                        ps = "\n".join(
+                            l for l in ps.splitlines()
+                            if ("gunicorn" in l or "cloudflared" in l)
+                        )
+                    except Exception as e:
+                        ps = repr(e)
+                    out = {
+                        "ts": _t31b.time(),
+                        "diag_version": "r25c31-fallback",
+                        "kernel_log": _ring31(),
+                        "wserver_log": _tail31(
+                            os.path.join(KAGGLE_WORKING, "wserver.log"), 400),
+                        "bot_log": _tail31(
+                            os.path.join(WZMLX_DIR, "log.txt"), 300),
+                        "processes": ps,
+                        "note": "gunicorn down - notebook fallback active",
+                    }
+                    self._send31(200, _j31.dumps(out, ensure_ascii=False))
+                elif path == "/health":
+                    self._send31(
+                        200,
+                        '{"bot_responding": false, "wzfix": "fallback"}',
+                    )
+                else:
+                    self._send31(
+                        200,
+                        "<html><head><meta name='viewport' content='width=device-"
+                        "width,initial-scale=1'></head><body style='font-family:"
+                        "sans-serif;background:#111;color:#eee;padding:24px;"
+                        "max-width:480px;margin:auto'>"
+                        "<h2>🎵 WZML web player</h2>"
+                        "<p>The web server is down and recovering. Logs are "
+                        "being collected automatically and the bot (Telegram) "
+                        "is unaffected.</p></body></html>",
+                        "text/html",
+                    )
+
+            def log_message(self, fmt, *args):
+                return
+
+        log("r25c31: fallback web server armed (watching port 8080)")
+        _hold_until = 0.0
+        while True:
+            try:
+                if _t31.time() < _hold_until:
+                    _t31.sleep(10)
+                    continue
+                if _alive31():
+                    _t31.sleep(10)
+                    continue
+                try:
+                    srv = _hs31.ThreadingHTTPServer(("0.0.0.0", 8080), _H31)
+                except Exception as _e:
+                    log(f"r25c31: fallback bind failed: {_e!r}", "WARN")
+                    _t31.sleep(20)
+                    continue
+                srv.daemon_threads = True
+                _th31.Thread(target=srv.serve_forever, daemon=True).start()
+                log("r25c31: fallback SERVING on 8080 (gunicorn down)")
+                _t31.sleep(300)
+                srv.shutdown()
+                srv.server_close()
+                log("r25c31: releasing 8080 for gunicorn restart window")
+                _hold_until = _t31.time() + 90
+            except Exception as _e:
+                log(f"r25c31: fallback loop error: {_e!r}", "WARN")
+                _t31.sleep(20)
+
+    threading.Thread(target=_r31_fallback_web, daemon=True).start()  # WZFIX r25c31
 
     # ------------------------------------------------------------------
     # Step 7: Claim the session lock + start the self-termination timer
