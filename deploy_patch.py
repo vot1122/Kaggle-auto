@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c33 (v15.83.33) - pin WZML-X + access logs.
+"""One-shot patch loader: R25c34 (v15.83.34) - working tree pin.
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c33: the upstream wzv3 branch drifted (6cc2760 -> ab6464d2)
-on 28 Sep, breaking the wserver lifespan, bot.ext_utils (playlists
-500s) and patch anchors. This pins the clone to the last-known-good
-commit 6cc2760 and enables gunicorn access logging so request/status
-lines are visible via /_diag/logs.
+R25c34: r25c33's pin failed (git refuses non-tip SHA fetches). Now
+fetches by full SHA with a codeload tarball fallback, pinning WZML-X
+to the last-known-good 6cc2760ab1c9 tree where music + playlists
+worked. Access logging (r25c33) stays on.
 """
 import hashlib
 import os
@@ -16,7 +15,7 @@ import sys
 import urllib.request
 
 URL = "https://drive.usercontent.google.com/download?id=1eMZwOcnSKvHHZDvz3vrzsWNC2dv_dT2Q&export=download&confirm=t"
-EXPECT_SHA256 = "29dae7bda274faa988a08edb635813e2af794ad21c5f9c6361c18f6a021d4f77"
+EXPECT_SHA256 = "e35ea56315bd499e60cb12d72e5e6db2cb0dd7e0f8ff3d250c068444d8bdbe58"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
