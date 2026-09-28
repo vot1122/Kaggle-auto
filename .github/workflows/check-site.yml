@@ -1,0 +1,32 @@
+name: Check Site Health
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe the live web endpoints
+        run: |
+          BASE="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
+          echo "=== /health ==="
+          code=$(curl -sS -m 30 -o /tmp/h.json -w "%{http_code}" "$BASE/health" || echo FAIL)
+          echo "status: $code"
+          cat /tmp/h.json 2>/dev/null || true; echo
+          if [ "$code" != "200" ]; then echo "HEALTH FAILED"; exit 1; fi
+          echo "=== / (homepage) ==="
+          code2=$(curl -sS -m 30 -o /tmp/root.html -w "%{http_code}" "$BASE/" || echo FAIL)
+          echo "status: $code2"
+          head -c 300 /tmp/root.html 2>/dev/null || true; echo
+          if [ "$code2" != "200" ]; then echo "HOME FAILED"; exit 1; fi
+          echo "=== /music ==="
+          code3=$(curl -sS -m 30 -o /tmp/m.html -w "%{http_code}" "$BASE/music" || echo FAIL)
+          echo "status: $code3"
+          head -c 200 /tmp/m.html 2>/dev/null || true; echo
+          if [ "$code3" != "200" ]; then echo "MUSIC FAILED"; exit 1; fi
+          echo "=== /playlists ==="
+          code4=$(curl -sS -m 30 -o /tmp/p.html -w "%{http_code}" "$BASE/playlists" || echo FAIL)
+          echo "status: $code4"
+          if [ "$code4" != "200" ]; then echo "PLAYLISTS FAILED"; exit 1; fi
+          echo "ALL ENDPOINTS OK"
