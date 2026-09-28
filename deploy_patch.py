@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c22 (v15.83.22) — mobile bar fix.
+"""One-shot patch loader: R25c23 (v15.83.23).
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c22: player bar no longer overflows on phones — secondary
-controls moved to a "more" sheet; 2-line song names.
+R25c23: smart display names (strip repeated track prefixes),
+SVG download icons, sort fixes with toast feedback.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1ndnTJlDrc0bMCIdhJZzr_DeFElEYwsgN&export=download&confirm=t"
-EXPECT_SHA256 = "137e820ac4c22b723d50a8cea196c2f3c272ed689dab378cb667206a83eafabf"
+URL = "https://drive.usercontent.google.com/download?id=1dSD0U3vtSktZ5gkUEuqJj3oNQY1SQapm&export=download&confirm=t"
+EXPECT_SHA256 = "c640c6475e8e32a8e602e3b8a9c7ea1da5605f6876b567847ef4bf6efdc92c07"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
