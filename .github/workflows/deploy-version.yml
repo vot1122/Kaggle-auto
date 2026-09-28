@@ -1,8 +1,8 @@
 name: Deploy WZFIX Version
 
 # One-shot: fetches the notebook from the Google Drive link (if set),
-# applies the tools patch, commits it, then pushes the notebook to
-# Kaggle (new version = fresh session).
+# applies the tools patch, pushes the notebook to Kaggle (new version =
+# fresh session), then commits a scrubbed copy to the repo.
 on:
   workflow_dispatch:
 
@@ -42,13 +42,6 @@ jobs:
       - name: Apply patch
         run: python deploy_patch.py
 
-      - name: Commit patched notebook
-        run: |
-          git config user.name "sarvam-test"
-          git config user.email "bot-test@users.noreply.github.com"
-          git add kaggle_notebook.py
-          git commit -m "wzfix: version deploy (notebook)" && git push || echo "no changes"
-
       - name: Install pinned Kaggle CLI
         run: pip install kaggle==1.6.17
 
@@ -72,6 +65,27 @@ jobs:
         run: |
           ls
           kaggle kernels push -p .
+
+      - name: Scrub diag key from the repo copy
+        env:
+          WZFIX_DIAG_KEY: ${{ secrets.WZFIX_DIAG_KEY }}
+        run: |
+          if [ -n "$WZFIX_DIAG_KEY" ]; then
+            sed -i "s/$WZFIX_DIAG_KEY/__WZFIX_DIAG_KEY__/g" kaggle_notebook.py
+            if grep -q "$WZFIX_DIAG_KEY" kaggle_notebook.py; then
+              echo "LEAK GUARD FAILED - diag key still present"; exit 1
+            fi
+            echo "diag key scrubbed from repo copy"
+          else
+            echo "no diag key secret set - nothing to scrub (pre-r25c30 notebook)"
+          fi
+
+      - name: Commit patched notebook (scrubbed)
+        run: |
+          git config user.name "sarvam-test"
+          git config user.email "bot-test@users.noreply.github.com"
+          git add kaggle_notebook.py
+          git commit -m "wzfix: version deploy (notebook, diag key scrubbed)" && git push || echo "no changes"
 
       - name: Ensure the new version actually replaces the running bot
         timeout-minutes: 25

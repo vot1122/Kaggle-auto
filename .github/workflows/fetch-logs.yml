@@ -1,5 +1,4 @@
 name: fetch-logs
-
 on:
   workflow_dispatch:
 
@@ -8,10 +7,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Fetch live diagnostics bundle via the worker (primary channel)
+        env:
+          WZFIX_DIAG_KEY: ${{ secrets.WZFIX_DIAG_KEY }}
+        run: |
+          BASE="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
+          echo '===== live diag bundle (wserver /_diag/logs, r25c30) ====='
+          code=$(curl -sS -m 45 -o /tmp/diag.json -w "%{http_code}" -H "X-Diag-Key: $WZFIX_DIAG_KEY" "$BASE/_diag/logs" || echo FAIL)
+          echo "diag status: $code"
+          if [ "$code" = "200" ]; then
+            jq '{ts, diag_version, bundle_ts: .bundle.ts, version: .bundle.version, shipper_note: .bundle.shipper_note, processes, sockets}' /tmp/diag.json
+            echo '--- kernel_log tail (last 60 lines) ---'
+            jq -r '.bundle.kernel_log' /tmp/diag.json | tail -60
+            echo '--- wserver.log tail (last 50 lines) ---'
+            jq -r '.wserver_log' /tmp/diag.json | tail -50
+            echo '--- bundle wserver_log tail (last 30 lines) ---'
+            jq -r '.bundle.wserver_log' /tmp/diag.json | tail -30
+            echo '--- bot_log tail (last 20 lines) ---'
+            jq -r '.bundle.bot_log' /tmp/diag.json | tail -20
+          else
+            echo "diag endpoint unreachable (site down, or pre-r25c30 session still running)"
+            cat /tmp/diag.json 2>/dev/null || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diag-bundle
+          path: /tmp/diag.json
+
       - name: Install kaggle CLI
         run: pip install -q kaggle==1.6.17
 
-      - name: Fetch log bundle from the kernel's dataset
+      - name: Kaggle kernel status + dataset channel (diagnostics)
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
@@ -22,12 +50,5 @@ jobs:
           echo '===== kernel status ====='
           curl -sS -m 20 -u "$KAGGLE_USERNAME:$KAGGLE_KEY" "https://www.kaggle.com/api/v1/kernels/status?user_name=djoshi7&kernel_slug=wzml-x" || true
           echo
-          echo '===== my datasets (permission probe) ====='
-          kaggle datasets list --mine 2>&1 | head -10 || true
-          echo '===== dataset status ====='
+          echo '===== dataset channel (legacy - kernel cannot auth) ====='
           kaggle datasets status djoshi7/wzmlx-logs 2>&1 || true
-          echo '===== dataset download ====='
-          kaggle datasets download djoshi7/wzmlx-logs -p /tmp/logs --unzip -o 2>&1 || true
-          ls -la /tmp/logs
-          echo '===== bundle.json ====='
-          cat /tmp/logs/bundle.json 2>/dev/null || echo 'bundle.json not found - dataset not created yet (kernel not booted or shipper failed)'
