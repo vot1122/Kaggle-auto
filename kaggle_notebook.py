@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.83.32  (log everything + self-serve logs)
+ WZFIX BUILD: v15.83.33  (log everything + self-serve logs)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v15.83.32"
+    ver = "v15.83.33"
 
     def _r19_poll():
         import time as _r19t
@@ -479,6 +479,10 @@ PATCH_DATA = [
     ('patch_r25c32_ct.py',
      'web/wserver.py',
      "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJwYXRjaF9yMjVjMzJfY3QucHkgLSBmaXggdGhlIENsaWVudFRpbWVvdXQgTmFtZUVycm9yIGluIHdzZXJ2ZXIucHkuCgpUaGUgRmFzdEFQSSBhcHAncyBsaWZlc3BhbiBzdGFydHVwIGNhbGxzIENsaWVudFRpbWVvdXQoLi4uKSB3aXRob3V0CmltcG9ydGluZyBpdCwgc28gZ3VuaWNvcm4ncyB3b3JrZXIgZGllcyBhdCBib290IChleGl0IGNvZGUgMywgbWFzdGVyCnNodXRzIGRvd24pIGFuZCB0aGUgc2l0ZSA1MDJzIGZvcmV2ZXIuIFByZXBlbmQgYSBndWFyZGVkIGltcG9ydC4KIiIiCmltcG9ydCBzeXMKCnBhdGggPSBzeXMuYXJndlsxXQp3aXRoIG9wZW4ocGF0aCwgInIiLCBlbmNvZGluZz0idXRmLTgiKSBhcyBmOgogICAgc3JjID0gZi5yZWFkKCkKCmlmICJyMjVjMzIiIGluIHNyYzoKICAgIHByaW50KCJwYXRjaF9yMjVjMzJfY3Q6IGFscmVhZHkgYXBwbGllZCIpCiAgICBzeXMuZXhpdCgwKQoKSEVBRCA9ICgKICAgICJ0cnk6XG4iCiAgICAiICAgIGZyb20gYWlvaHR0cCBpbXBvcnQgQ2xpZW50VGltZW91dCAgIyBXWkZJWCByMjVjMzJcbiIKICAgICJleGNlcHQgSW1wb3J0RXJyb3I6ICAjIHZlcnkgb2xkIGFpb2h0dHBcbiIKICAgICIgICAgZnJvbSBhaW9odHRwLmNsaWVudCBpbXBvcnQgQ2xpZW50VGltZW91dCAgIyBXWkZJWCByMjVjMzJcbiIKKQpzcmMgPSBIRUFEICsgc3JjCgp3aXRoIG9wZW4ocGF0aCwgInciLCBlbmNvZGluZz0idXRmLTgiKSBhcyBmOgogICAgZi53cml0ZShzcmMpCnByaW50KCJwYXRjaF9yMjVjMzJfY3Q6IENsaWVudFRpbWVvdXQgaW1wb3J0IHByZXBlbmRlZCB0byB3c2VydmVyLnB5IikK"),
+
+    ('patch_r25c33_al.py',
+     'bot/core/startup.py',
+     "IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJwYXRjaF9yMjVjMzNfYWwucHkgLSBndW5pY29ybiBhY2Nlc3MgbG9nIG9uIChyZXF1ZXN0ICsgc3RhdHVzIGxpbmVzKS4KCkV2ZXJ5IEhUVFAgcmVxdWVzdCB0byB0aGUgd2ViIHNlcnZlciBub3cgbGFuZHMgaW4gd3NlcnZlci5sb2cgd2l0aCBpdHMKc3RhdHVzIGNvZGUsIHNvIHJlbW90ZSBsb2cgcHVsbHMgKC9fZGlhZy9sb2dzKSBzaG93IGV4YWN0bHkgd2hhdCB0aGUKYnJvd3NlciBhc2tlZCBmb3IgYW5kIHdoYXQgdGhlIHNlcnZlciBhbnN3ZXJlZC4KIiIiCmltcG9ydCBzeXMKCnBhdGggPSBzeXMuYXJndlsxXQp3aXRoIG9wZW4ocGF0aCwgInIiLCBlbmNvZGluZz0idXRmLTgiKSBhcyBmOgogICAgc3JjID0gZi5yZWFkKCkKCmlmICJyMjVjMzMiIGluIHNyYzoKICAgIHByaW50KCJwYXRjaF9yMjVjMzNfYWw6IGFscmVhZHkgYXBwbGllZCIpCiAgICBzeXMuZXhpdCgwKQoKbzEgPSAnZiIgLS1iaW5kIDAuMC4wLjA6e1BPUlR9ID4+IC9rYWdnbGUvd29ya2luZy93c2VydmVyLmxvZyAyPiYxIiwnCm4xID0gJ2YiIC0tYmluZCAwLjAuMC4wOntQT1JUfSAtLWFjY2Vzcy1sb2dmaWxlIC0gPj4gL2thZ2dsZS93b3JraW5nL3dzZXJ2ZXIubG9nIDI+JjEiLCcKbzIgPSAnZiJ3ZWIud3NlcnZlcjphcHAgLS1iaW5kIDAuMC4wLjA6e1BPUlR9ICInCm4yID0gJ2Yid2ViLndzZXJ2ZXI6YXBwIC0tYmluZCAwLjAuMC4wOntQT1JUfSAtLWFjY2Vzcy1sb2dmaWxlIC0gIicKYzEsIGMyID0gc3JjLmNvdW50KG8xKSwgc3JjLmNvdW50KG8yKQpzcmMgPSBzcmMucmVwbGFjZShvMSwgbjEsIDEpCnNyYyA9IHNyYy5yZXBsYWNlKG8yLCBuMiwgMSkKCndpdGggb3BlbihwYXRoLCAidyIsIGVuY29kaW5nPSJ1dGYtOCIpIGFzIGY6CiAgICBmLndyaXRlKHNyYykKcHJpbnQoZiJwYXRjaF9yMjVjMzNfYWw6IGFjY2VzcyBsb2cgb24gKGJvb3QgbGluZToge2MxfSwgd2F0Y2hkb2cgbGluZToge2MyfSkiKQo="),
 
 ]
 
@@ -6500,12 +6504,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.83.32"\n'
+                'WZFIX_BUILD = "v15.83.33"\n'
                 'WZFIX_DATE = "26 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
         log("  r1: versions.py written (v15.83.16 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.83.32 running")
+        log("  WZFIX BUILD v15.83.33 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -11536,6 +11540,27 @@ def main():
             ],
             check=True, timeout=120, capture_output=True, text=True,
         )
+        # WZFIX r25c33: pin to the last-known-good wzv3 commit. Upstream
+        # drifted to ab6464d2 on 28 Sep and broke the wserver lifespan
+        # (ClientTimeout), moved bot.ext_utils (playlists 500s) and
+        # invalidated patch anchors. All patches are validated on 6cc2760.
+        _pin = "6cc2760"
+        _pr = subprocess.run(
+            ["git", "-C", WZMLX_DIR, "fetch", "--depth", "1", "origin", _pin],
+            capture_output=True, text=True, timeout=180,
+        )
+        if _pr.returncode == 0:
+            subprocess.run(
+                ["git", "-C", WZMLX_DIR, "checkout", "--detach", "FETCH_HEAD"],
+                check=True, timeout=60, capture_output=True, text=True,
+            )
+            log(f"WZML-X pinned to {_pin} (last-known-good, r25c33)")
+        else:
+            _err = (_pr.stderr or "")[:120]
+            log(
+                f"WZFIX r25c33: pin fetch failed - staying on wzv3 tip ({_err})",
+                "WARN",
+            )
         log("WZML-X cloned successfully")
     except Exception as e:
         log(f"Failed to clone WZML-X: {e}", "ERROR")
@@ -11907,7 +11932,7 @@ def main():
                     ss = "(ss failed)"
                 bundle = {
                     "ts": now_ist_str(),
-                    "version": "v15.83.32",
+                    "version": "v15.83.33",
                     "tunnel": tunnel_url,
                     "kernel_log": "\n".join(_LOG_RING[-400:]),
                     "wserver_log": _tail(os.path.join(KAGGLE_WORKING, "wserver.log"), 400),
