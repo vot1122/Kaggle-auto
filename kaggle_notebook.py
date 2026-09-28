@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.83.33  (log everything + self-serve logs)
+ WZFIX BUILD: v15.83.34  (log everything + self-serve logs)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v15.83.33"
+    ver = "v15.83.34"
 
     def _r19_poll():
         import time as _r19t
@@ -6504,12 +6504,12 @@ async def _wzfix_record_start(message):
             encoding="utf-8",
         ) as f:
             f.write(
-                'WZFIX_BUILD = "v15.83.33"\n'
+                'WZFIX_BUILD = "v15.83.34"\n'
                 'WZFIX_DATE = "26 Sep 2026 (IST)"\n'
                 'WZFIX_BASE = "WZML-X wzv3 @ ab6464d2"\n'
             )
         log("  r1: versions.py written (v15.83.16 — shows in /log boot banner)")
-        log("  WZFIX BUILD v15.83.33 running")
+        log("  WZFIX BUILD v15.83.34 running")
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
@@ -11544,7 +11544,8 @@ def main():
         # drifted to ab6464d2 on 28 Sep and broke the wserver lifespan
         # (ClientTimeout), moved bot.ext_utils (playlists 500s) and
         # invalidated patch anchors. All patches are validated on 6cc2760.
-        _pin = "6cc2760"
+        _pin = "6cc2760ab1c95a8e05661f10b8ee0b2f499dbe39"
+        _ok = False
         _pr = subprocess.run(
             ["git", "-C", WZMLX_DIR, "fetch", "--depth", "1", "origin", _pin],
             capture_output=True, text=True, timeout=180,
@@ -11554,13 +11555,36 @@ def main():
                 ["git", "-C", WZMLX_DIR, "checkout", "--detach", "FETCH_HEAD"],
                 check=True, timeout=60, capture_output=True, text=True,
             )
-            log(f"WZML-X pinned to {_pin} (last-known-good, r25c33)")
+            _ok = True
+            log(f"WZML-X pinned to {_pin[:8]} via git fetch (r25c34)")
         else:
-            _err = (_pr.stderr or "")[:120]
-            log(
-                f"WZFIX r25c33: pin fetch failed - staying on wzv3 tip ({_err})",
-                "WARN",
-            )
+            # git servers refuse non-tip SHAs - fetch the tarball instead
+            try:
+                _tgz = (
+                    "https://codeload.github.com/SilentDemonSD/WZML-X/"
+                    "tar.gz/" + _pin
+                )
+                subprocess.run(
+                    ["curl", "-sSL", "-o", "/tmp/_wz.tgz", _tgz],
+                    check=True, timeout=300, capture_output=True, text=True,
+                )
+                shutil.rmtree(WZMLX_DIR, ignore_errors=True)
+                os.makedirs(WZMLX_DIR, exist_ok=True)
+                subprocess.run(
+                    [
+                        "tar", "-xzf", "/tmp/_wz.tgz",
+                        "-C", WZMLX_DIR, "--strip-components=1",
+                    ],
+                    check=True, timeout=120, capture_output=True, text=True,
+                )
+                _ok = True
+                log(f"WZML-X pinned to {_pin[:8]} via tarball (r25c34)")
+            except Exception as _te:
+                log(
+                    f"WZFIX r25c34: pin failed ({_te!r}) - staying on wzv3 tip",
+                    "WARN",
+                )
+        log("WZML-X cloned successfully")
         log("WZML-X cloned successfully")
     except Exception as e:
         log(f"Failed to clone WZML-X: {e}", "ERROR")
@@ -11932,7 +11956,7 @@ def main():
                     ss = "(ss failed)"
                 bundle = {
                     "ts": now_ist_str(),
-                    "version": "v15.83.33",
+                    "version": "v15.83.34",
                     "tunnel": tunnel_url,
                     "kernel_log": "\n".join(_LOG_RING[-400:]),
                     "wserver_log": _tail(os.path.join(KAGGLE_WORKING, "wserver.log"), 400),
