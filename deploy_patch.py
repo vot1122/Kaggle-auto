@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""One-shot patch loader: R25c24 (v15.83.24).
+"""One-shot patch loader: R25c25 (v15.83.25) — homepage v2.
 
 The real payload is served from Drive (uploaded byte-exact); this
 downloads it, verifies its sha256, and runs it.
 
-R25c24: row relayout (actions right, duration under the name) and
-majority-rule name cleaning with .mp3 stripping.
+R25c25: full landing-page replacement — own content, repo links
+removed except About; stats, features grid, how-it-works.
 """
 import hashlib
 import os
 import sys
 import urllib.request
 
-URL = "https://drive.usercontent.google.com/download?id=1lnEbsPH_gLNMpmAVqjFQ9WNsMg9BCVZT&export=download&confirm=t"
-EXPECT_SHA256 = "d4dd81fbec7a66c8cd7ac16af9e836b192e01243a41fdcd7d57fd758b58f6d08"
+URL = "https://drive.usercontent.google.com/download?id=17S2lZ0anOhFnNJMVHnoTMAFBtFKunDkx&export=download&confirm=t"
+EXPECT_SHA256 = "17eceed79e12bad881218cf640e0d669c0a9ee0fc8977c2da994ad62f11304e0"
 
 dst = "_real_deploy_patch.py"
 req = urllib.request.Request(URL, headers={"User-Agent": "Mozilla/5.0"})
