@@ -1,0 +1,29 @@
+name: fetch-logs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Install kaggle CLI
+        run: pip install -q kaggle==1.6.17
+
+      - name: Fetch log bundle from the kernel's dataset
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p ~/.kaggle /tmp/logs
+          printf '{"username":"%s","key":"%s"}\n' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+          echo '===== kernel status ====='
+          curl -sS -m 20 -u "$KAGGLE_USERNAME:$KAGGLE_KEY" "https://www.kaggle.com/api/v1/kernels/status?user_name=djoshi7&kernel_slug=wzml-x" || true
+          echo
+          echo '===== dataset download ====='
+          kaggle datasets download djoshi7/wzmlx-logs -p /tmp/logs --unzip -o || true
+          ls -la /tmp/logs
+          echo '===== bundle.json ====='
+          cat /tmp/logs/bundle.json 2>/dev/null || echo 'bundle.json not found - dataset not created yet (kernel not booted or shipper failed)'
