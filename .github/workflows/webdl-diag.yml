@@ -1,0 +1,18 @@
+name: WebDL Diag
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe the live webdl endpoints
+        run: |
+          W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+          for p in /health /webdl /wzadmin; do
+            echo "=== GET $W$p ==="
+            curl -sS -m 30 -A "$UA" -o /tmp/body -w "code=%{http_code} size=%{size_download}\n" "$W$p" || echo CURL_FAIL
+            head -c 150 /tmp/body 2>/dev/null; echo; echo
+          done
