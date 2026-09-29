@@ -14,10 +14,9 @@ at boot:
 
 - `wzfix_r17_round.py` — installs the module, registers the /webdl
   routes on the stream server and adds the wserver /webdl proxy
-  (streamed for file downloads)
-- `wzfix_r17_webdl.py` — the module itself
-
-Both files are also mirrored in `wzfix_deploy/` in this repo.
+  (streamed for file downloads). Reference copy: `wzfix_deploy/r17_round.py`
+- `wzfix_r17_webdl.py` — the module itself (Drive id
+  1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi)
 
     GitHub Pages ─┐
     (vot1122.github.io/ytwebdownload)  Cloudflare Worker (unchanged)
@@ -72,7 +71,7 @@ gone; finished ones live only until the TTL deletes them (6 h).
 - Separate password (never the stream or admin one); bearer tokens are
 HMAC-signed with a per-bot secret, 72 h expiry.
 - Login is rate-limited per IP (5 fails → 10 min lock) and failures go
-  to LOG_CHAT.
+to LOG_CHAT.
 - URLs are restricted to http(s); yt-dlp flags come only from the
-  server side; the frontend can only pick a format id.
+server side; the frontend can only pick a format id.
 - UA filtering on the page and login, like wzadmin.
