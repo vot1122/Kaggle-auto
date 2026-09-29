@@ -1,18 +1,27 @@
-name: WebDL Diag
+name: WebDL Kernel Log
 
 on:
   workflow_dispatch:
 
 jobs:
-  diag:
+  log:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe the live webdl endpoints
+      - name: Pull the running kernel log
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
         run: |
-          W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          for p in /health /webdl /webdl/api/state /wzadmin /; do
-            echo "=== GET $W$p ==="
-            curl -sS -m 30 -A "$UA" -o /tmp/body -w "code=%{http_code} size=%{size_download}\n" "$W$p" || echo CURL_FAIL
-            head -c 400 /tmp/body 2>/dev/null; echo; echo
+          NB="${{ secrets.KAGGLE_NOTEBOOK }}"
+          echo "notebook: $NB"
+          pip install -q kaggle==1.6.17
+          mkdir -p /tmp/kout
+          kaggle kernels output "$NB" -p /tmp/kout || echo "OUTPUT_PULL_FAILED"
+          ls -la /tmp/kout
+          for f in /tmp/kout/*.log /tmp/kout/*.txt; do
+            [ -f "$f" ] || continue
+            echo "===== $f (r17/r2/errors) ====="
+            grep -n -i "r17\|r2: \|r2 wserver\|error\|failed\|anchor\|exception\|Traceback\|wserver\|stream server\|patch kit\|addition" "$f" | tail -120
+            echo "===== $f (tail 40) ====="
+            tail -40 "$f"
           done
