@@ -10354,18 +10354,19 @@ async def _wzfix_record_start(message):
     # Pages (vot1122.github.io/ytwebdownload). The module + route patches
     # live outside the notebook (kernel source must stay < 1 MB): the
     # payload is Drive-hosted and sha256-pinned, same as _real_deploy_patch.
+    # NOTE: no bare "import urllib/hashlib" here — a local import would make
+    # "urllib" function-local and break the patch-kit download above (the
+    # v15.84.0 bug: UnboundLocalError -> whole kit skipped). Module-level
+    # urllib.request is used as-is; hashlib comes in via __import__.
     # Fails safe - on any error the bot boots without /webdl.
     try:
-        import hashlib
-        import urllib.request
-
         _r17_url = (
             "https://drive.usercontent.google.com/download?"
             "id=16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl&export=download&confirm=t"
         )
-        _r17_sha = "9ecc57fa3ef48abbc3cf35e567b162429819b3748b0778d96ab8000c03c51853"
+        _r17_sha = "f588d9a80c1987a6b8c7912c4f82ecbb033ed62cbeed322aaadae6db60d36624"
         _r17 = urllib.request.urlopen(_r17_url, timeout=60).read()
-        if hashlib.sha256(_r17).hexdigest() != _r17_sha:
+        if __import__("hashlib").sha256(_r17).hexdigest() != _r17_sha:
             raise ValueError("payload sha mismatch")
         with open(os.path.join(os.getcwd(), "_r17_round.py"), "wb") as f:
             f.write(_r17)
