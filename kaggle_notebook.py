@@ -10364,7 +10364,7 @@ async def _wzfix_record_start(message):
             "https://drive.usercontent.google.com/download?"
             "id=16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl&export=download&confirm=t"
         )
-        _r17_sha = "f39edfea1f9f8f2af2290f1633c1417f5704565a52ec26c7ece823bbce3557ca"
+        _r17_sha = "ce1a4faead3b755e3e6b23652e4c8de68ca1e4ef298c4b661277c469c047b638"
         _r17 = urllib.request.urlopen(_r17_url, timeout=60).read()
         if __import__("hashlib").sha256(_r17).hexdigest() != _r17_sha:
             raise ValueError("payload sha mismatch")
