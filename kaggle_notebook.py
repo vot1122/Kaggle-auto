@@ -10347,6 +10347,42 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r25: FAILED - {e}", "ERROR")
 
+    # Kaggle addition R17 — Round 17 (v15.84): web downloader (remote payload).
+    # The bot becomes a downloader site: paste a link on the web page, the
+    # bot's yt-dlp engine grabs it and the finished file downloads straight
+    # to the user's device. Frontend: GET /webdl on the worker URL + GitHub
+    # Pages (vot1122.github.io/ytwebdownload). The module + route patches
+    # live outside the notebook (kernel source must stay < 1 MB): the
+    # payload is Drive-hosted and sha256-pinned, same as _real_deploy_patch.
+    # Fails safe - on any error the bot boots without /webdl.
+    try:
+        import hashlib
+        import urllib.request
+
+        _r17_url = (
+            "https://drive.usercontent.google.com/download?"
+            "id=16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl&export=download&confirm=t"
+        )
+        _r17_sha = "9ecc57fa3ef48abbc3cf35e567b162429819b3748b0778d96ab8000c03c51853"
+        _r17 = urllib.request.urlopen(_r17_url, timeout=60).read()
+        if hashlib.sha256(_r17).hexdigest() != _r17_sha:
+            raise ValueError("payload sha mismatch")
+        with open(os.path.join(os.getcwd(), "_r17_round.py"), "wb") as f:
+            f.write(_r17)
+        _r = subprocess.run(
+            [sys.executable, "_r17_round.py", WZMLX_DIR],
+            capture_output=True, text=True, timeout=180,
+        )
+        for _ln in (_r.stdout or "").splitlines():
+            log(f"  r17: {_ln}")
+        if _r.returncode != 0:
+            log(
+                f"  r17: payload FAILED - {(_r.stderr or '')[-300:]}",
+                "ERROR",
+            )
+    except Exception as e:
+        log(f"  r17: FAILED - {e}", "ERROR")
+
     log("WZML-X-Bot patch kit applied")
     return True
 
