@@ -1,0 +1,34 @@
+name: Check Force Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Query both kernel statuses
+        shell: bash
+        run: |
+          set +e
+          AUTH="djoshi7:${KAGGLE_KEY}"
+          BASE="https://www.kaggle.com/api/v1"
+          for SLUG in wzml-x wzml-x-force; do
+            echo "===== $SLUG status ====="
+            curl -sS -m 30 -u "$AUTH" "$BASE/kernels/status?user_name=djoshi7&kernel_slug=$SLUG"
+            echo; echo
+          done
+          echo "===== force kernel output (tail) ====="
+          curl -sS -m 60 -u "$AUTH" "$BASE/kernels/output?user_name=djoshi7&kernel_slug=wzml-x-force" -o /tmp/fout
+          echo "output size: $(stat -c%s /tmp/fout 2>/dev/null)"
+          file /tmp/fout
+          if unzip -l /tmp/fout >/dev/null 2>&1; then
+            unzip -o -q /tmp/fout -d /tmp/foutd
+            find /tmp/foutd -type f -exec echo '--- {} ---' \; -exec tail -c 4000 {} \;
+          else
+            tail -c 4000 /tmp/fout
+          fi
+          echo
+        env:
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
