@@ -1,0 +1,15 @@
+name: PD Check
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions: {contents: read}
+    steps:
+      - name: check pixeldrain candidates
+        run: |
+          for id in zqsDV4Gr 7SipXJ2b; do
+            echo "=== $id ==="
+            curl -sS -m 60 "https://pixeldrain.com/api/file/$id/info" | head -c 600; echo; echo
+          done
