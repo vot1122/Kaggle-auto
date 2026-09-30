@@ -1,0 +1,23 @@
+name: Link Check
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions: {contents: read}
+    steps:
+      - name: verify the two speed-test links
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+          echo "=== pixeldrain: Nova Escritorio 9.0 ==="
+          curl -sS -m 60 "https://pixeldrain.com/api/file/jf1TivHd/info"; echo
+          echo "=== mediafire: pearOS NiceC0re ==="
+          curl -sSL -m 60 -A "$UA" -o mf.html -w "page_code=%{http_code}\n" "https://www.mediafire.com/file/544fs03y8dx1qsv/pearOS-NiceC0re-2022.04-x86_64.iso/file"
+          grep -oE '\([0-9.]+[[:space:]]*(KB|MB|GB)\)' mf.html | head -1
+          echo "=== download speed sample: 60s from pixeldrain ==="
+          timeout 60 curl -sS -o /dev/null -w "bytes=%{size_download} speed=%{speed_download} B/s\n" "https://pixeldrain.com/api/file/jf1TivHd" || echo "sample ended (timeout ok)"
+          echo "=== download speed sample: 60s from mediafire (direct link if found) ==="
+          dl=$(grep -oE 'https://download[0-9]+\.mediafire\.com/[^" ]+' mf.html | head -1)
+          echo "direct: $dl"
+          [ -n "$dl" ] && timeout 60 curl -sSL -A "$UA" -o /dev/null -w "bytes=%{size_download} speed=%{speed_download} B/s\n" "$dl" || echo "no direct link extractable"
