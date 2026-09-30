@@ -12,40 +12,36 @@ jobs:
           W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
           P="https://vot1122.github.io/ytwebdownload"
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          echo "=== worker version (expect v17.0.0) ==="
+          echo "=== worker version (expect v17.2.0) ==="
           curl -sS -m 30 -A "$UA" -o /tmp/v -w "code=%{http_code}\n" "$W/webdl/api/version"
           cat /tmp/v; echo; echo
-          echo "=== public /api/meta ==="
-          curl -sS -m 30 -A "$UA" -o /tmp/m -w "code=%{http_code}\n" "$W/webdl/api/meta"
-          cat /tmp/m; echo; echo
-          echo "=== like endpoint (device fp-diag70) ==="
+          echo "=== unban_all endpoint must be 403 without owner auth ==="
+          curl -sS -m 30 -A "$UA" -X POST -H 'Content-Type: application/json' \
+            -d '{}' -o /tmp/ua -w "code=%{http_code}\n" "$W/webdl/api/admin/unban_all"
+          cat /tmp/ua; echo; echo
+          echo "=== guest login 403 (guest mode OFF) ==="
           curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"dev":"diagprobe70","fp":"fdiagprobe70"}' \
-            -o /tmp/l -w "code=%{http_code}\n" "$W/webdl/api/like"
-          cat /tmp/l; echo; echo
-          echo "=== guest login must be 403 (guest mode OFF) ==="
-          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"guest":1,"dev":"diagprobe70","fp":"fdiagprobe70"}' \
+            -d '{"guest":1,"dev":"diagprobe80","fp":"fdiagprobe80"}' \
             -o /tmp/g -w "code=%{http_code}\n" "$W/webdl/api/login"
           cat /tmp/g; echo; echo
-          echo "=== unknown account login must be 401 ==="
+          echo "=== unknown account login 401 ==="
           curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"user":"nosuchuser","pass":"wrongpass","fp":"fdiagprobe70"}' \
+            -d '{"user":"nosuchuser","pass":"wrongpass","fp":"fdiagprobe80"}' \
             -o /tmp/u -w "code=%{http_code}\n" "$W/webdl/api/login"
           cat /tmp/u; echo; echo
-          echo "=== bad invite code must be 403 ==="
+          echo "=== bad invite 403 ==="
           curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"invite":"WZ-DEADBEEF","user":"testx","pass":"test1234","fp":"fdiagprobe70"}' \
+            -d '{"invite":"WZ-DEADBEEF","user":"testx","pass":"test1234","fp":"fdiagprobe80"}' \
             -o /tmp/i -w "code=%{http_code}\n" "$W/webdl/api/login"
           cat /tmp/i; echo; echo
-          echo "=== wrong owner password must be 401 ==="
+          echo "=== wrong owner password 401 ==="
           curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
             -d '{"pass":"definitely-wrong-xyz"}' \
             -o /tmp/w -w "code=%{http_code}\n" "$W/webdl/api/login"
           cat /tmp/w; echo; echo
-          echo "=== Pages page checks ==="
+          echo "=== Pages page v17.2.0 checks ==="
           curl -sS -m 30 -A "$UA" -o /tmp/p2 -w "code=%{http_code}\n" "$P/"
-          for kw in likeBtn inviteCode "Get more limits" "Contact the owner" backend.json signout accounts; do
+          for kw in unbanAll data-adel data-aban data-ares likeBtn inviteCode backend.json signout accounts; do
             if grep -q "$kw" /tmp/p2; then echo "PASS: $kw present"; else echo "FAIL: $kw missing"; fi
           done
           if grep -q "DEFAULT_API" /tmp/p2; then echo "FAIL: DEFAULT_API in page"; else echo "PASS: no DEFAULT_API"; fi
