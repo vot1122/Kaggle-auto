@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v15.83.34  (log everything + self-serve logs)
+ WZFIX BUILD: v16.1.0-r19  (multi-user webdl + /ws + guests)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v15.83.34"
+    ver = "v16.1.0-r19"
 
     def _r19_poll():
         import time as _r19t
