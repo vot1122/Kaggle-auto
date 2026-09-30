@@ -10,31 +10,26 @@ jobs:
       - name: probe
         run: |
           W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
+          P="https://vot1122.github.io/ytwebdownload"
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          echo "=== version ==="
+          echo "=== worker version (expect v16.4.0) ==="
           curl -sS -m 30 -A "$UA" -o /tmp/v -w "code=%{http_code}\n" "$W/webdl/api/version"
           cat /tmp/v; echo; echo
-          echo "=== guest login (fp identity) ==="
+          echo "=== worker /webdl page must NOT contain DEFAULT_API or the worker URL ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/p1 -w "code=%{http_code}\n" "$W/webdl"
+          if grep -q "DEFAULT_API" /tmp/p1; then echo "FAIL: DEFAULT_API found in worker page"; else echo "PASS: no DEFAULT_API in worker page"; fi
+          if grep -q "backend.json" /tmp/p1; then echo "PASS: worker page has backend.json resolver"; else echo "note: worker page same-origin (no backend.json needed)"; fi
+          if grep -qE "https://[a-z0-9-]+\.workers\.dev" /tmp/p1; then echo "FAIL: worker URL found in page"; else echo "PASS: no worker URL in page"; fi
+          echo "=== Pages backend.json ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/b -w "code=%{http_code}\n" "$P/backend.json"
+          cat /tmp/b; echo; echo
+          echo "=== Pages index.html must NOT contain DEFAULT_API or the worker URL ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/p2 -w "code=%{http_code}\n" "$P/"
+          if grep -q "DEFAULT_API" /tmp/p2; then echo "FAIL: DEFAULT_API in Pages page"; else echo "PASS: no DEFAULT_API in Pages page"; fi
+          if grep -qE "https://[a-z0-9-]+\.workers\.dev" /tmp/p2; then echo "FAIL: worker URL in Pages page"; else echo "PASS: no worker URL in Pages page"; fi
+          if grep -q "backend.json" /tmp/p2; then echo "PASS: Pages page fetches backend.json"; else echo "FAIL: no backend.json fetch"; fi
+          echo "=== guest login via Pages-resolved backend ==="
           curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"guest":1,"dev":"diagprobe123","fp":"fdiagprobe998"}' \
+            -d '{"guest":1,"dev":"diagprobe40","fp":"fdiagprobe40"}' \
             -o /tmp/g -w "code=%{http_code}\n" "$W/webdl/api/login"
-          cat /tmp/g; echo; echo
-          echo "=== guest state (token in header) ==="
-          TOK=$(python3 -c "import json;print(json.load(open('/tmp/g')).get('token',''))" 2>/dev/null || true)
-          if [ -n "$TOK" ]; then
-            curl -sS -m 30 -A "$UA" -H "Authorization: Bearer $TOK" \
-              -o /tmp/s -w "code=%{http_code}\n" "$W/webdl/api/state"
-            cat /tmp/s; echo; echo
-          else
-            echo "no token - login failed"
-          fi
-          echo "=== second guest login same fp (must be same device, no error) ==="
-          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"guest":1,"dev":"OTHERdev","fp":"fdiagprobe998"}' \
-            -o /tmp/g2 -w "code=%{http_code}\n" "$W/webdl/api/login"
-          cat /tmp/g2; echo; echo
-          echo "=== wrong owner password (must be 401) ==="
-          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"pass":"definitely-wrong-xyz"}' \
-            -o /tmp/w -w "code=%{http_code}\n" "$W/webdl/api/login"
-          cat /tmp/w; echo
+          cat /tmp/g; echo
