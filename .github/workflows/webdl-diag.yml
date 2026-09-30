@@ -1,18 +1,40 @@
 name: WebDL Diag
-
 on:
   workflow_dispatch:
 
 jobs:
   diag:
     runs-on: ubuntu-latest
+    permissions: {contents: read}
     steps:
-      - name: Probe the live webdl endpoints
+      - name: probe
         run: |
           W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          for p in /health /webdl /wzadmin; do
-            echo "=== GET $W$p ==="
-            curl -sS -m 30 -A "$UA" -o /tmp/body -w "code=%{http_code} size=%{size_download}\n" "$W$p" || echo CURL_FAIL
-            head -c 150 /tmp/body 2>/dev/null; echo; echo
-          done
+          echo "=== version ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/v -w "code=%{http_code}\n" "$W/webdl/api/version"
+          cat /tmp/v; echo; echo
+          echo "=== guest login (fp identity) ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"guest":1,"dev":"diagprobe123","fp":"fdiagprobe998"}' \
+            -o /tmp/g -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/g; echo; echo
+          echo "=== guest state (token in header) ==="
+          TOK=$(python3 -c "import json;print(json.load(open('/tmp/g')).get('token',''))" 2>/dev/null || true)
+          if [ -n "$TOK" ]; then
+            curl -sS -m 30 -A "$UA" -H "Authorization: Bearer $TOK" \
+              -o /tmp/s -w "code=%{http_code}\n" "$W/webdl/api/state"
+            cat /tmp/s; echo; echo
+          else
+            echo "no token - login failed"
+          fi
+          echo "=== second guest login same fp (must be same device, no error) ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"guest":1,"dev":"OTHERdev","fp":"fdiagprobe998"}' \
+            -o /tmp/g2 -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/g2; echo; echo
+          echo "=== wrong owner password (must be 401) ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"pass":"definitely-wrong-xyz"}' \
+            -o /tmp/w -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/w; echo
