@@ -1,0 +1,80 @@
+name: Force Start WZFIX
+
+# Boots a SECOND kernel (slug wzml-x-force) with the current notebook.
+# The new session performs the standard session-lock takeover: it pings
+# the running instance's /wzadmin and calls /wzadmin/api/takeover with the
+# registry token, which stops the old bot gracefully. One bot remains.
+# Use when a version deploy is waiting for the old session's 9.5h cap.
+on:
+  workflow_dispatch:
+
+jobs:
+  force:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Fetch notebook from Google Drive link
+        run: |
+          if [ -f wzfix_deploy/notebook_gdrive.txt ]; then
+            URL=$(grep -o 'https://[^ ]*' wzfix_deploy/notebook_gdrive.txt | head -1)
+            if [ -n "$URL" ]; then
+              curl -sL "$URL" -o kaggle_notebook.py
+              SZ=$(stat -c%s kaggle_notebook.py)
+              if [ "$SZ" -lt 500000 ] || ! grep -q "Kaggle addition O" kaggle_notebook.py; then
+                echo "Drive download failed or invalid (size=$SZ) — keeping repo notebook"
+                git checkout -- kaggle_notebook.py
+              else
+                echo "notebook fetched from Google Drive ($SZ bytes)"
+              fi
+            fi
+          else
+            echo "no gdrive link file — using repo notebook"
+          fi
+
+      - name: Apply patch
+        run: python deploy_patch.py
+
+      - name: Point kernel-metadata at the force slug
+        run: |
+          sed -i 's#"id": "djoshi7/wzml-x"#"id": "djoshi7/wzml-x-force"#' kernel-metadata.json
+          sed -i 's#"title": "wzml-x"#"title": "wzml-x-force"#' kernel-metadata.json
+          grep -E '"(id|title)"' kernel-metadata.json
+
+      - name: Install pinned Kaggle CLI
+        run: pip install kaggle==1.6.17
+
+      - name: Configure Kaggle credentials
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          mkdir -p ~/.kaggle
+          printf '{"username":"%s","key":"%s"}\n' "$KAGGLE_USERNAME" "$KAGGLE_KEY" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Push force kernel (new session takes over the old one)
+        run: kaggle kernels push -p .
+
+      - name: Confirm the new session came up
+        timeout-minutes: 20
+        run: |
+          set +e
+          MAIN="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
+          for i in $(seq 1 50); do
+            V=$(curl -sS -m 20 "$MAIN/webdl/api/version" 2>/dev/null || echo '')
+            if echo "$V" | grep -q '"r17"'; then
+              echo "NEW VERSION IS UP:"
+              echo "$V"
+              exit 0
+            fi
+            H=$(curl -sS -m 20 "$MAIN/health" 2>/dev/null || echo '{}')
+            echo "[$i] waiting for takeover + boot… $(echo "$H" | grep -o '"bot_responding": *[a-z]*' | head -1)"
+            sleep 25
+          done
+          echo "WARNING: could not confirm the force session (check kernel logs)"
