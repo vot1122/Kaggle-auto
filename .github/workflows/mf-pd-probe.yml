@@ -1,0 +1,46 @@
+name: MF-PD Probe
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    permissions: {contents: read}
+    steps:
+      - name: find mediafire files around 1.9GB + upload pixeldrain test file
+        run: |
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+          echo "=== collect mediafire candidate URLs from public pages ==="
+          : > mf_urls.txt
+          for page in \
+            "https://www.edubudgie.com/download" \
+            "https://techrechard.com/download-pearos-nicec0re-iso-for-virtualbox-and-vmware/" ; do
+            curl -sSL -m 45 -A "$UA" "$page" 2>/dev/null \
+              | grep -oE 'https?://www\.mediafire\.com/file/[A-Za-z0-9]+/[^"'"'"' ]+' \
+              >> mf_urls.txt || true
+          done
+          sort -u mf_urls.txt -o mf_urls.txt
+          wc -l < mf_urls.txt
+          echo "=== check each mediafire page: filename + size ==="
+          : > mf_results.txt
+          while read -r u; do
+            html=$(curl -sSL -m 45 -A "$UA" "$u" 2>/dev/null || true)
+            title=$(echo "$html" | grep -oE '<title>[^<]+' | head -1 | sed 's/<title>//')
+            size=$(echo "$html" | grep -oE '\([0-9.]+[[:space:]]*(KB|MB|GB)\)' | head -1)
+            [ -z "$size" ] && size=$(echo "$html" | grep -oiE '"file_size[^,]*|[0-9.]+[[:space:]]*(KB|MB|GB)' | head -2 | tr '\n' ' ')
+            echo "URL: $u" >> mf_results.txt
+            echo "  title: $title" >> mf_results.txt
+            echo "  size:  $size" >> mf_results.txt
+          done < mf_urls.txt
+          cat mf_results.txt
+          echo
+          echo "=== pixeldrain: create + upload 1.9GiB random test file ==="
+          dd if=/dev/urandom of=test_1_9gb.bin bs=1M count=1945 status=none
+          ls -l test_1_9gb.bin
+          resp=$(curl -sS -m 1800 --retry 2 -T test_1_9gb.bin "https://pixeldrain.com/api/file/test_1_9gb.bin")
+          echo "PIXELDRAIN RESPONSE: $resp"
+          id=$(echo "$resp" | grep -oE '"id"[: ]*"[a-z0-9]+"' | cut -d'"' -f4)
+          echo "PIXELDRAIN LINK: https://pixeldrain.com/u/$id"
+          echo "=== verify pixeldrain file info ==="
+          curl -sS -m 60 "https://pixeldrain.com/api/file/$id/info" || true
+          echo
