@@ -12,26 +12,41 @@ jobs:
           W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
           P="https://vot1122.github.io/ytwebdownload"
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          echo "=== worker version (expect v16.5.0) ==="
+          echo "=== worker version (expect v17.0.0) ==="
           curl -sS -m 30 -A "$UA" -o /tmp/v -w "code=%{http_code}\n" "$W/webdl/api/version"
           cat /tmp/v; echo; echo
-          echo "=== Pages page has why-rendering + backend.json fetch, no baked URL ==="
-          curl -sS -m 30 -A "$UA" -o /tmp/p2 -w "code=%{http_code}\n" "$P/"
-          if grep -q "t.why" /tmp/p2; then echo "PASS: task why rendering present"; else echo "FAIL: no t.why"; fi
-          if grep -q "d.why" /tmp/p2; then echo "PASS: formats why present"; else echo "FAIL: no d.why"; fi
-          if grep -q "backend.json" /tmp/p2; then echo "PASS: backend.json fetch present"; else echo "FAIL: no backend.json fetch"; fi
-          if grep -q "DEFAULT_API" /tmp/p2; then echo "FAIL: DEFAULT_API in page"; else echo "PASS: no DEFAULT_API"; fi
-          if grep -qE "https://[a-z0-9-]+\.workers\.dev" /tmp/p2; then echo "FAIL: worker URL in page"; else echo "PASS: no worker URL in page"; fi
-          echo "=== Pages backend.json ==="
-          curl -sS -m 30 -A "$UA" -o /tmp/b -w "code=%{http_code}\n" "$P/backend.json"
-          cat /tmp/b; echo; echo
-          echo "=== guest login via Pages-resolved backend ==="
+          echo "=== public /api/meta ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/m -w "code=%{http_code}\n" "$W/webdl/api/meta"
+          cat /tmp/m; echo; echo
+          echo "=== like endpoint (device fp-diag70) ==="
           curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"guest":1,"dev":"diagprobe50","fp":"fdiagprobe50"}' \
+            -d '{"dev":"diagprobe70","fp":"fdiagprobe70"}' \
+            -o /tmp/l -w "code=%{http_code}\n" "$W/webdl/api/like"
+          cat /tmp/l; echo; echo
+          echo "=== guest login must be 403 (guest mode OFF) ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"guest":1,"dev":"diagprobe70","fp":"fdiagprobe70"}' \
             -o /tmp/g -w "code=%{http_code}\n" "$W/webdl/api/login"
           cat /tmp/g; echo; echo
-          echo "=== formats on a bad link: error + why present ==="
-          curl -sS -m 40 -A "$UA" -H 'Content-Type: application/json' \
-            -d '{"url":"https://example.com/definitely-not-a-video-xyz"}' \
-            -o /tmp/f -w "code=%{http_code}\n" "$W/webdl/api/formats"
-          cat /tmp/f; echo
+          echo "=== unknown account login must be 401 ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"user":"nosuchuser","pass":"wrongpass","fp":"fdiagprobe70"}' \
+            -o /tmp/u -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/u; echo; echo
+          echo "=== bad invite code must be 403 ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"invite":"WZ-DEADBEEF","user":"testx","pass":"test1234","fp":"fdiagprobe70"}' \
+            -o /tmp/i -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/i; echo; echo
+          echo "=== wrong owner password must be 401 ==="
+          curl -sS -m 30 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"pass":"definitely-wrong-xyz"}' \
+            -o /tmp/w -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/w; echo; echo
+          echo "=== Pages page checks ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/p2 -w "code=%{http_code}\n" "$P/"
+          for kw in likeBtn inviteCode "Get more limits" "Contact the owner" backend.json signout accounts; do
+            if grep -q "$kw" /tmp/p2; then echo "PASS: $kw present"; else echo "FAIL: $kw missing"; fi
+          done
+          if grep -q "DEFAULT_API" /tmp/p2; then echo "FAIL: DEFAULT_API in page"; else echo "PASS: no DEFAULT_API"; fi
+          if grep -qE "https://[a-z0-9-]+\.workers\.dev" /tmp/p2; then echo "FAIL: worker URL in page"; else echo "PASS: no worker URL in page"; fi
