@@ -52,6 +52,13 @@ WS_KEYS = [
     ("PD_KEY", "Pixeldrain API key (big-file route)"),
     ("PD_LOW", "Cloud upload from (GB)"),
     ("PD_HIGH", "Cloud upload up to (GB)"),
+    ("R2_ENDPOINT", "R2 endpoint (S3 URL)"),
+    ("R2_BUCKET", "R2 bucket name"),
+    ("R2_KEY_ID", "R2 access key id"),
+    ("R2_SECRET", "R2 secret access key"),
+    ("R2_PUBLIC", "R2 public base (r2.dev)"),
+    ("R2_LOW", "R2 upload from (GB)"),
+    ("R2_HIGH", "R2 upload up to (GB)"),
     ("MEMBER_SLOTS", "Member parallel slots"),
     ("GUEST_SLOTS", "Guest parallel slots"),
     ("DEFAULT_THEME", "Default site theme"),
@@ -101,6 +108,10 @@ _DB_FIELDS = {"WEBDL_PASS": "pass", "WEBDL_TTL": "ttl", "WEBDL_MAX_GB": "max_gb"
               "WEBDL_CONC": "conc", "USER_MAX_GB": "user_max_gb",
               "USER_DAILY": "user_daily", "PD_KEY": "pd_key",
               "PD_LOW": "pd_low_gb", "PD_HIGH": "pd_high_gb",
+              "R2_ENDPOINT": "r2_endpoint", "R2_BUCKET": "r2_bucket",
+              "R2_KEY_ID": "r2_key_id", "R2_SECRET": "r2_secret",
+              "R2_PUBLIC": "r2_public", "R2_LOW": "r2_low_gb",
+              "R2_HIGH": "r2_high_gb",
               "MAINTENANCE": "maintenance", "ANNOUNCE": "announcement",
               "THEME": "theme", "MEMBER_SLOTS": "member_slots",
               "GUEST_SLOTS": "guest_slots", "DEFAULT_THEME": "default_theme",
@@ -119,6 +130,7 @@ _RANGES = {"WEBDL_TTL": (1, 48), "WEBDL_MAX_GB": (1, 40), "WEBDL_CONC": (1, 4),
            "S_MAX_GB": (0.1, 40), "S_DAILY": (1, 500),
            "BW_GLOBAL_MB": (0, 500000), "BW_USER_MB": (0, 500000),
            "PD_LOW": (0.1, 40), "PD_HIGH": (0.1, 40),
+           "R2_LOW": (0.1, 40), "R2_HIGH": (0, 40),
            "MEMBER_SLOTS": (1, 20), "GUEST_SLOTS": (1, 20)}
 # settings that are actions, not stored values
 _ACTIONS = {"ADD_USER", "INVITE_CODE", "DEL_USER", "RESET_DEV",
@@ -179,11 +191,27 @@ def _current(key, doc):
         else:
             _d = {"BW_GLOBAL_MB": 0, "BW_USER_MB": 0}
         return str(v if v is not None else _d[key])
+    if key in ("R2_ENDPOINT", "R2_KEY_ID", "R2_BUCKET", "R2_PUBLIC"):
+        return str(v) if v else "not set"
+    if key == "R2_SECRET":
+        return "set" if v else "not set"
+    if key in ("R2_LOW", "R2_HIGH"):
+        return str(v if v is not None else (0.1 if key == "R2_LOW" else 0))
     if key in _ACTIONS:
         return "tap to do it"
     if v in (None, ""):
         v = _DEFAULTS.get(f, "")
     return str(v)
+
+
+def _cloud_route(doc):
+    """J-22b: which cloud delivery route is live right now."""
+    if all(doc.get(k) for k in ("r2_endpoint", "r2_key_id", "r2_secret",
+                                "r2_bucket", "r2_public")):
+        return "Cloudflare R2"
+    if doc.get("pd_key"):
+        return "Pixeldrain"
+    return "direct link (tunnel)"
 
 
 # v19.0.0: the panel is grouped into sections (40+ items in one list was
@@ -201,7 +229,9 @@ SECTIONS = [
         "USER_DAILY", "MEMBER_SLOTS", "GUEST_SLOTS", "BW_GLOBAL_MB",
         "BW_USER_MB"]),
     ("cloud", "☁ Cloud &amp; backend", [
-        "PD_KEY", "PD_LOW", "PD_HIGH", "SITE_BACKEND", "GH_TOKEN"]),
+        "PD_KEY", "PD_LOW", "PD_HIGH", "R2_ENDPOINT", "R2_BUCKET",
+        "R2_KEY_ID", "R2_SECRET", "R2_PUBLIC", "R2_LOW", "R2_HIGH",
+        "SITE_BACKEND", "GH_TOKEN"]),
     ("telegram", "✈ Telegram", [
         "TG_FILES_CHAT", "TG_LOGS_CHAT", "NOTIFY_DONE", "TG_TEST"]),
     ("invites", "🎟 Invite codes", [
@@ -252,6 +282,7 @@ def _menu_text(doc, note=""):
     return ("⌬ <b><u>Website Settings (/ws)</u></b>\n│\n"
             + "\n".join(rows)
             + "\n┖ pick a section to open it" + note
+            + f"\n\n<i>Cloud route live: <b>{_cloud_route(doc)}</b></i>"
             + "\n\n<i>Everything here applies to the website instantly. "
               "The owner is never counted in slots or limits.</i>")
 
@@ -522,6 +553,16 @@ async def _save(key, val):
             pass  # allow clearing
         elif len(v) < 20:
             return "that does not look like a GitHub token", ""
+    elif key in ("R2_ENDPOINT", "R2_PUBLIC"):
+        v = (val or "").strip().rstrip("/")
+        if v and not v.startswith("https://"):
+            return "send a full https:// URL", ""
+    elif key in ("R2_KEY_ID", "R2_BUCKET"):
+        v = (val or "").strip()
+    elif key == "R2_SECRET":
+        v = (val or "").strip()
+        if v and len(v) < 20:
+            return "that does not look like an R2 secret key", ""
     elif key == "SITE_NAME":
         v = (val or "").strip()
         if not v:
@@ -1068,7 +1109,7 @@ async def ws_receive(client, message):
 
 MODULE_URL = ("https://drive.usercontent.google.com/download?"
               "id=1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi&export=download&confirm=t")
-MODULE_SHA = "ffaeaa8f78270be28c445cf91471bbce75c548ba07682920f7bac215e14bcfb3"
+MODULE_SHA = "1d139740049b147fa4a59a196cf7f3c5b2cbb5f173beaf3fec5e490295126df1"
 
 WZMLX = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
 
