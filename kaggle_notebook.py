@@ -10353,43 +10353,21 @@ async def _wzfix_record_start(message):
     # to the user's device. Frontend: GET /webdl on the worker URL + GitHub
     # Pages (vot1122.github.io/ytwebdownload). The module + route patches
     # live outside the notebook (kernel source must stay < 1 MB): the
-    # payload is GitHub-first with a SHA-verified Google Drive fallback.
+    # payload is Drive-hosted and sha256-pinned, same as _real_deploy_patch.
     # NOTE: no bare "import urllib/hashlib" here — a local import would make
     # "urllib" function-local and break the patch-kit download above (the
     # v15.84.0 bug: UnboundLocalError -> whole kit skipped). Module-level
     # urllib.request is used as-is; hashlib comes in via __import__.
     # Fails safe - on any error the bot boots without /webdl.
     try:
-        _r17_github_url = (
-            "https://raw.githubusercontent.com/vot1122/Kaggle-auto/main/"
-            "wzfix_deploy/r17_round.py"
-        )
-        _r17_drive_url = (
+        _r17_url = (
             "https://drive.usercontent.google.com/download?"
             "id=16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl&export=download&confirm=t"
         )
-        _r17_sha = "0c3f5c22b9f1d029bb47f702e7a072ac4f9181447d5e7fc2bcad79cf9bb27448"
-        _r17 = None
-        _r17_errors = []
-        for _r17_source, _r17_url in (("GitHub", _r17_github_url),
-                                      ("Google Drive", _r17_drive_url)):
-            try:
-                _r17_req = urllib.request.Request(
-                    _r17_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(_r17_req, timeout=60) as _r17_resp:
-                    _r17_candidate = _r17_resp.read()
-                _r17_got_sha = __import__("hashlib").sha256(
-                    _r17_candidate).hexdigest()
-                if _r17_got_sha != _r17_sha:
-                    raise ValueError(f"payload sha mismatch: {_r17_got_sha}")
-                _r17 = _r17_candidate
-                log(f"  r17: round fetched from {_r17_source} and verified")
-                break
-            except Exception as _r17_fetch_error:
-                _r17_errors.append(f"{_r17_source}: {_r17_fetch_error}")
-        if _r17 is None:
-            raise RuntimeError("both round sources failed: " +
-                               " | ".join(_r17_errors))
+        _r17_sha = "31cdae09710901998e5ffbd0a38a42171a7640c49a626b366192c7431e1f33b3"
+        _r17 = urllib.request.urlopen(_r17_url, timeout=60).read()
+        if __import__("hashlib").sha256(_r17).hexdigest() != _r17_sha:
+            raise ValueError("payload sha mismatch")
         with open(os.path.join(os.getcwd(), "_r17_round.py"), "wb") as f:
             f.write(_r17)
         _r = subprocess.run(

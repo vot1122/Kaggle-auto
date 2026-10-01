@@ -7,22 +7,16 @@ The Telegram bot is untouched.
 
 ## Architecture (remote payload — the 1 MB kernel cap)
 
-The Kaggle kernel source must stay under 1 MB. The notebook fetches
-`wzfix_deploy/r17_round.py` from raw GitHub first and falls back to its
-SHA-verified Google Drive copy. That round fetches `_remote_r17_webdl.py`
-from raw GitHub first, then falls back to its SHA-verified Drive copy.
-Both mirrors must contain byte-identical copies for the pinned hash to pass.
+The Kaggle kernel source must stay under 1 MB, so R17 follows the
+_real_deploy_patch pattern: the notebook carries only a tiny
+sha256-pinned round (~40 lines) which fetches two public Drive files
+at boot:
 
-| Repository source | Installed/Drive filename | Google Drive backup ID |
-|---|---|---|
-| `wzfix_deploy/r17_round.py` | `r17_round.py` | `16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl` |
-| `_remote_r17_webdl.py` | `r17_webdl.py` | `1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi` |
-
-Update the contents of those existing Drive files (do not create new files,
-which would have different IDs). In Drive, use **Manage versions → Upload new
-version**. Commit/push the two repository sources before the next Kaggle boot
-so the GitHub copies are available; the notebook changes also need to be
-included in the Kaggle notebook source.
+- `wzfix_r17_round.py` — installs the module, registers the /webdl
+  routes on the stream server and adds the wserver /webdl proxy
+  (streamed for file downloads). Reference copy: `wzfix_deploy/r17_round.py`
+- `wzfix_r17_webdl.py` — the module itself (Drive id
+  1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi)
 
     GitHub Pages ─┐
     (vot1122.github.io/ytwebdownload)  Cloudflare Worker (unchanged)
@@ -61,17 +55,10 @@ boot. The round now uses the module-level urllib and `__import__(
 | `WEBDL_CONC` | 2 | concurrent downloads |
 | `WEBDL_ORIGINS` | Pages URLs + localhost | CORS allow-list |
 
-## Coverage and limits
+## Honest limits (by design, this round)
 
-- The web downloader uses yt-dlp's supported extractors for a broad range
-  of video and social sites, then tries a bounded direct HTTP download when
-  extraction fails. A direct fallback succeeds only when the URL resolves
-  to a file response, not an HTML share page or login screen.
-- This is broad coverage, not literally every website. CAPTCHA, login,
-  premium, DRM, and unsupported site-specific flows still need valid access
-  or a dedicated extractor. Successful web downloads use the same limits,
-  accounting, and completion path as yt-dlp downloads.
-- Torrents/aria2/qbit/mirroring are R19.
+- **yt-dlp links only** (YouTube, Instagram, direct links).
+  Torrents/aria2/qbit/mirroring are R19.
 - The site only works while the bot session is awake (06:00–23:00 IST,
   plus restart windows). The page shows an offline banner and retries.
 - Playlists download only the single item (`--no-playlist`).
