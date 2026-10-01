@@ -7,30 +7,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {contents: read}
     steps:
-      - name: probe v19
+      - name: probe v19.1.0
         run: |
           W="https://twilight-thunder-4d48.joshifreefire-joshi.workers.dev"
           P="https://vot1122.github.io/ytwebdownload"
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-          echo "=== version (expect v19.0.0) ==="
+          echo "=== version (expect v19.1.0) ==="
           curl -sS -m 40 -A "$UA" "$W/webdl/api/version"; echo; echo
           echo "=== endpoints locked without owner auth ==="
-          for ep in admin/site admin/invites admin/disk admin/reload admin/pass admin/cookie_test admin/tg_test admin/unban_all protect history report state; do
+          for ep in admin/allow admin/site admin/invites admin/disk admin/reload admin/tg_test admin/unban_all protect history state; do
             c=$(curl -sS -m 25 -A "$UA" -X POST -H 'Content-Type: application/json' -d '{}' -o /dev/null -w "%{http_code}" "$W/webdl/api/$ep")
             echo "  $ep -> $c"
           done
           echo
-          echo "=== login gates ==="
-          curl -sS -m 25 -A "$UA" -H 'Content-Type: application/json' -d '{"guest":1,"dev":"diagp1","fp":"fdiagp1"}' -o /dev/null -w "guest=%{http_code}\n" "$W/webdl/api/login"
-          curl -sS -m 25 -A "$UA" -H 'Content-Type: application/json' -d '{"user":"nobody","pass":"x","fp":"fdiagp1"}' -o /dev/null -w "unknown-user=%{http_code}\n" "$W/webdl/api/login"
-          curl -sS -m 25 -A "$UA" -H 'Content-Type: application/json' -d '{"invite":"WZ-NOPE","user":"x","pass":"yyyy","fp":"fdiagp1"}' -o /dev/null -w "bad-invite=%{http_code}\n" "$W/webdl/api/login"
-          curl -sS -m 25 -A "$UA" -H 'Content-Type: application/json' -d '{"pass":"wrong-owner-pass"}' -o /dev/null -w "wrong-owner=%{http_code}\n" "$W/webdl/api/login"
-          echo
-          echo "=== redesign checks on the live page ==="
-          curl -sS -m 30 -A "$UA" -o /tmp/p3 "$P/"
-          for kw in 'data-act="settings"' s-settings id="tabs" tabBody AudioContext 'data-theme="ocean"' 'data-act="invite-go"' invUser invPass 'data-act="dl"' 'data-act="lock"' 'data-act="tgtest"' 'data-act="ulim"' id="maint" announce qbar slots; do
-            if grep -q "$kw" /tmp/p3; then echo "PASS: $kw"; else echo "FAIL: $kw"; fi
+          echo "=== dotted username must be refused, not crash ==="
+          curl -sS -m 25 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"invite":"WZ-NOPE","user":"d.j","pass":"test1234","fp":"fdiagp9","dev":"diagp9"}' \
+            -o /tmp/dj -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/dj; echo; echo
+          echo "=== guest network rule + naming ==="
+          curl -sS -m 25 -A "$UA" -H 'Content-Type: application/json' \
+            -d '{"guest":1,"dev":"diagp9","fp":"fdiagp9"}' \
+            -o /tmp/g -w "code=%{http_code}\n" "$W/webdl/api/login"
+          cat /tmp/g; echo; echo
+          echo "=== page: guard tab + guest info + username rule shown ==="
+          curl -sS -m 30 -A "$UA" -o /tmp/p4 "$P/"
+          for kw in "['guard','" "data-act=\"allowip\"" "data-act=\"allowdel\"" "data-act=\"attclear\"" "data-act=\"ginfo\"" "Blocked signup attempts" "One-time IP passes" "no dots or symbols" "data-act=\"settings\"" "AudioContext"; do
+            if grep -q "$kw" /tmp/p4; then echo "PASS: $kw"; else echo "FAIL: $kw"; fi
           done
-          if grep -qi "owner password" /tmp/p3; then echo "FAIL: owner hint still on login"; else echo "PASS: owner hint removed"; fi
-          if grep -qi "mediafire" /tmp/p3; then echo "FAIL: mediafire refs"; else echo "PASS: no mediafire"; fi
-          if grep -qE "https://[a-z0-9-]+\.workers\.dev" /tmp/p3; then echo "FAIL: worker url in page"; else echo "PASS: no worker url in page"; fi
