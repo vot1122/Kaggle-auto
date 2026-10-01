@@ -86,6 +86,27 @@ def _env(key, default=""):
         return getenv(key, "").strip()
 
 
+def _env2(key, default=""):
+    """Like _env but always falls back to os.environ.
+
+    The notebook exports every config.env key into the bot process
+    environment, so R2_* keys set there are visible even when the
+    bot's Config class does not declare them.
+    """
+    v = ""
+    try:
+        from ...core.config_manager import Config
+
+        v = str(getattr(Config, key, "") or "").strip()
+    except Exception:
+        v = ""
+    if not v:
+        from os import getenv
+
+        v = getenv(key, "").strip()
+    return v or default
+
+
 async def _settings(force=False):
     """Cached (60 s) webdl settings dict."""
     global _SETTINGS_CACHE
@@ -105,7 +126,9 @@ async def _settings(force=False):
          "v_max_gb": 4.0, "v_daily": 10, "s_max_gb": 10.0, "s_daily": 30,
          "bw_global_mb": 0, "bw_user_mb": 0,
          # v18.0.0: pixeldrain big-file route + site options
-         "pd_low_gb": 2.0, "pd_high_gb": 4.0,
+         "pd_low_gb": 0.1, "pd_high_gb": 0.0,
+         # J-22: Cloudflare R2 route (free egress CDN, preferred when set)
+         "r2_low_gb": 0.1, "r2_high_gb": 0.0,
          "maintenance": False, "announcement": "", "theme": "#7c5cff",
          # v19.0.0: role slot pools + site look
          "member_slots": 2, "guest_slots": 2, "default_theme": "midnight",
@@ -184,6 +207,21 @@ async def _settings(force=False):
         if v:
             try:
                 s[k.replace("WEBDL_", "").lower()] = cast(v)
+            except (TypeError, ValueError):
+                pass
+    # J-22: Cloudflare R2 credentials (config.env -> env). The route
+    # stays dormant until R2_ENDPOINT/R2_KEY_ID/R2_SECRET/R2_BUCKET/
+    # R2_PUBLIC are all present.
+    for _k2 in ("R2_ENDPOINT", "R2_KEY_ID", "R2_SECRET",
+                "R2_BUCKET", "R2_PUBLIC"):
+        _v2 = _env2(_k2)
+        if _v2:
+            s[_k2.lower()] = _v2
+    for _k2 in ("R2_LOW_GB", "R2_HIGH_GB"):
+        _v2 = _env2(_k2)
+        if _v2:
+            try:
+                s[_k2.lower()] = float(_v2)
             except (TypeError, ValueError):
                 pass
     s["conc"] = max(1, int(s["conc"]))
@@ -1078,6 +1116,58 @@ def _webdl_generic_filename(url, fallback="download.bin"):
     return fallback
 
 
+def _range_download(url, path, size, n, headers, max_bytes=None):
+    """WZFIX speed (J-21): fetch `url` as `n` parallel byte ranges.
+
+    Only called when the host advertises Accept-Ranges: bytes and the
+    size is known; any per-range failure raises and the caller falls
+    back to the original single-stream download.
+    """
+    import requests
+    from concurrent.futures import ThreadPoolExecutor
+
+    step = size // n
+    bounds = []
+    for i in range(n):
+        lo = i * step
+        hi = size - 1 if i == n - 1 else (lo + step - 1)
+        bounds.append((lo, hi))
+    part_paths = [f"{path}.wzpart{i}" for i in range(n)]
+
+    def _one(idx, lo, hi):
+        h = dict(headers)
+        h["Range"] = f"bytes={lo}-{hi}"
+        with requests.get(url, headers=h, stream=True, timeout=(20, 600),
+                          allow_redirects=True) as rr:
+            rr.raise_for_status()
+            if rr.status_code != 206:
+                raise RuntimeError("server ignored Range request")
+            with open(part_paths[idx], "wb") as fh:
+                for c in rr.iter_content(65536):
+                    fh.write(c)
+        if os.path.getsize(part_paths[idx]) != (hi - lo + 1):
+            raise RuntimeError("short range read")
+
+    try:
+        with ThreadPoolExecutor(max_workers=n) as ex:
+            list(ex.map(lambda b: _one(*b),
+                        [(i, lo, hi) for i, (lo, hi) in enumerate(bounds)]))
+        with open(path, "wb") as out:
+            for i in range(n):
+                with open(part_paths[i], "rb") as pf:
+                    while True:
+                        c = pf.read(1 << 20)
+                        if not c:
+                            break
+                        out.write(c)
+    finally:
+        for p in part_paths:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
 def _webdl_generic_direct(url, path, max_bytes=None):
     """Download a direct HTTP file, rejecting HTML pages and over-budget files."""
     import requests
@@ -1095,6 +1185,24 @@ def _webdl_generic_direct(url, path, max_bytes=None):
                     raise RuntimeError("direct file exceeds remaining disk budget")
             except ValueError:
                 pass
+        # WZFIX speed (J-21): parallel byte-range fetch when the host
+        # allows it (a single stream from a throttled CDN is the slow path)
+        try:
+            _nr = max(1, int(_env("WEBDL_RANGES", "8") or 8))
+        except Exception:
+            _nr = 8
+        if (_nr > 1 and content_length
+                and (r.headers.get("Accept-Ranges") or "").lower() == "bytes"):
+            try:
+                _sz = int(content_length)
+                if _sz > (4 << 20):
+                    _range_download(url, path, _sz, _nr, headers, max_bytes)
+                    return _sz
+            except Exception:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
         chunks = r.iter_content(65536)
         first = next(chunks, b"")
         if not first:
@@ -1221,6 +1329,113 @@ async def _pd_route(t, path, size):
             pass
 
 
+def _r2_put_blocking(path, name, s, t):
+    """J-22: upload to Cloudflare R2 via the S3 API.
+
+    boto3 does a parallel multipart upload (8 threads, 16 MB parts), so
+    the outbound leg is fast too - not the single stream pixeldrain uses.
+    """
+    import boto3
+    from boto3.s3.transfer import TransferConfig
+
+    total = os.path.getsize(path)
+    client = boto3.client(
+        "s3",
+        endpoint_url=str(s["r2_endpoint"]),
+        aws_access_key_id=str(s["r2_key_id"]),
+        aws_secret_access_key=str(s["r2_secret"]),
+        region_name="auto",
+    )
+    cfg = TransferConfig(
+        multipart_threshold=16 * 1024 * 1024,
+        multipart_chunksize=16 * 1024 * 1024,
+        max_concurrency=8,
+        use_threads=True,
+    )
+    key = f"dl/{t['id'][:8]}/{str(name)[:180]}"
+    seen = [0]
+
+    def _cb(n):
+        seen[0] += n
+        if total:
+            t["pd_pct"] = round(100.0 * seen[0] / total, 1)
+
+    with open(path, "rb") as fh:
+        client.upload_fileobj(
+            fh, str(s["r2_bucket"]), key,
+            ExtraArgs={"ContentType": "application/octet-stream"},
+            Config=cfg, Callback=_cb,
+        )
+    base = str(s.get("r2_public") or "").rstrip("/")
+    return f"{base}/{quote(key)}"
+
+
+async def _r2_upload(path, name, t=None):
+    """Upload to R2 in a worker thread, reporting progress."""
+    s = await _settings()
+    if not (s.get("r2_endpoint") and s.get("r2_key_id")
+            and s.get("r2_secret") and s.get("r2_bucket")
+            and s.get("r2_public")):
+        raise RuntimeError("R2 not configured (owner: config.env)")
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, _r2_put_blocking, path, name, s,
+        t if t is not None else {})
+
+
+async def _r2_route(t, path, size):
+    """Background: upload to R2, attach the public CDN link.
+
+    Reuses the pd_* task fields so the existing cloud UI works unchanged.
+    """
+    try:
+        s = await _settings()
+        if not s.get("r2_key_id"):
+            t["pd_err"] = "cloud route not configured (owner: config.env)"
+            return
+        t["pd_status"] = "uploading"
+        t["pd_pct"] = 0.0
+        t["cloud"] = "r2"
+        _evt(f"r2-upload start {t['id'][:8]} size={_nice(size)}")
+        try:
+            link = await _r2_upload(path, t["file"], t)
+        except Exception:
+            t["pd_pct"] = 0.0
+            _evt(f"r2-upload retry {t['id'][:8]}")
+            link = await _r2_upload(path, t["file"], t)
+        t["pd"] = link
+        t["pd_status"] = "done"
+        t["pd_pct"] = 100.0
+        _evt(f"r2-upload done {t['id'][:8]}")
+        await _audit("r2 upload done",
+                     f"{t['file'][:50]} -> {link}",
+                     ip=str(t.get("ip", "") or ""),
+                     ua=str(t.get("ua", "") or ""),
+                     dev=t.get("dev", ""))
+    except Exception as e:
+        t["pd_status"] = "error"
+        t["pd_err"] = f"{e.__class__.__name__}: {e}"[:200]
+        _evt(f"r2-upload FAIL {t['id'][:8]}: {t['pd_err']}")
+        try:
+            await _notify(f"[webdl] R2 upload failed\n"
+                          f"file: {t.get('file', '?')[:80]}\n"
+                          f"error: {t['pd_err']}\n"
+                          f"site: {t.get('url', '')[:100]}")
+        except Exception:
+            pass
+
+
+async def _cloud_route(t, path, size):
+    """J-22: prefer R2 (fast, free egress); fall back to pixeldrain."""
+    s = await _settings()
+    if (s.get("r2_endpoint") and s.get("r2_key_id")
+            and s.get("r2_secret") and s.get("r2_bucket")
+            and s.get("r2_public")):
+        await _r2_route(t, path, size)
+    else:
+        await _pd_route(t, path, size)
+
+
 async def _run_task(t):
     global _SEM
     s = await _settings(force=True)
@@ -1253,6 +1468,16 @@ async def _run_task(t):
                 "--newline", "--no-playlist", "--no-mtime", "--no-warnings",
                 "-o", os.path.join(tdir, "%(title).120B [%(id)s].%(ext)s"),
             ]
+            # WZFIX speed (J-21): parallelize DASH/HLS/YouTube segment
+            # fetches. yt-dlp defaults to ONE fragment at a time, so a
+            # YouTube download runs on a single TCP stream (~1-3 MB/s
+            # from Kaggle). WEBDL_FRAG (default 8) opens that many
+            # parallel fragment connections inside the one job.
+            try:
+                _frag = max(1, int(_env("WEBDL_FRAG", "8") or 8))
+            except Exception:
+                _frag = 8
+            cmd += ["--concurrent-fragments", str(_frag)]
             if use_generic:
                 cmd += [
                     "--extractor-args", "generic:impersonate=chrome_110",
@@ -1410,8 +1635,11 @@ async def _run_task(t):
                             _evt(f"generic resolved {t['id'][:8]} host={resolved[:140]}")
                         name = _webdl_generic_filename(resolved, "download.bin")
                         out = os.path.join(tdir, name)
-                        _webdl_generic_direct(resolved, out,
-                                              max_bytes=max(0, int(remaining)))
+                        await asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: _webdl_generic_direct(
+                                resolved, out,
+                                max_bytes=max(0, int(remaining))))
                         rc = 0
                         _evt(f"generic-fallback downloaded {t['id'][:8]} "
                              f"file={os.path.basename(out)}")
@@ -1493,12 +1721,25 @@ async def _run_task(t):
                 dev=t.get("dev", "")))
             t["speed"] = t["eta"] = ""
             t["status"] = "done"
-            # v18.0.0: big files go to the owner's pixeldrain account
-            _pl = float(s.get("pd_low_gb", 2) or 0) * (1 << 30)
-            _ph = float(s.get("pd_high_gb", 4) or 0) * (1 << 30)
-            if _pl < best_sz < _ph and s.get("pd_key"):
+            # WZFIX speed (J-22): cloud delivery for large files.
+            # Cloudflare R2 is preferred when configured (free egress,
+            # fast CDN, parallel multipart upload); pixeldrain is the
+            # fallback. Either way the user gets a direct CDN link
+            # instead of streaming back through the quick tunnel.
+            # A high bound <= 0 means "no upper cap".
+            _r2_on = bool(s.get("r2_endpoint") and s.get("r2_key_id")
+                          and s.get("r2_secret") and s.get("r2_bucket")
+                          and s.get("r2_public"))
+            if _r2_on:
+                _pl = float(s.get("r2_low_gb", 0.1) or 0) * (1 << 30)
+                _ph = float(s.get("r2_high_gb", 0) or 0) * (1 << 30)
+            else:
+                _pl = float(s.get("pd_low_gb", 0.1) or 0) * (1 << 30)
+                _ph = float(s.get("pd_high_gb", 0) or 0) * (1 << 30)
+            if ((_r2_on or s.get("pd_key")) and best_sz >= _pl
+                    and (_ph <= 0 or best_sz < _ph)):
                 asyncio.get_event_loop().create_task(
-                    _pd_route(t, best, best_sz))
+                    _cloud_route(t, best, best_sz))
             t["done_at"] = time.time()
             _evt(f"done {t['id'][:8]} file={t.get('file', '?')} size={t.get('size', '?')}")
             if s.get("notify_done"):
@@ -3399,8 +3640,8 @@ async def webdl_api(request):
             "disk": _disk[:60],
             "today_downloads": _today_n,
             "pixeldrain": {"on": bool(s.get("pd_key")),
-                           "low_gb": s.get("pd_low_gb", 2),
-                           "high_gb": s.get("pd_high_gb", 4)},
+                           "low_gb": s.get("pd_low_gb", 0.1),
+                           "high_gb": s.get("pd_high_gb", 0)},
             "slots": {"member": int(s.get("member_slots", 2)),
                       "guest": int(s.get("guest_slots", 2)),
                       "running": {"member": _running_pool("v"),
@@ -3864,7 +4105,7 @@ async def webdl_api(request):
                 if k in body:
                     try:
                         v = float(body[k])
-                        if 0.1 <= v <= 40:
+                        if 0 <= v <= 40:
                             upd[k] = v
                     except (TypeError, ValueError):
                         pass
