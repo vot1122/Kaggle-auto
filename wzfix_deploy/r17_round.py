@@ -1109,7 +1109,7 @@ async def ws_receive(client, message):
 
 MODULE_URL = ("https://drive.usercontent.google.com/download?"
               "id=1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi&export=download&confirm=t")
-MODULE_SHA = "1d139740049b147fa4a59a196cf7f3c5b2cbb5f173beaf3fec5e490295126df1"
+MODULE_SHA = "2ee85331362ffd226441e81a212dda04d86b45d61406d2e3253b4d17c8a17eac"
 
 WZMLX = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
 
