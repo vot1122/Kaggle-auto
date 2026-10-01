@@ -10364,7 +10364,7 @@ async def _wzfix_record_start(message):
             "https://drive.usercontent.google.com/download?"
             "id=16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl&export=download&confirm=t"
         )
-        _r17_sha = "31cdae09710901998e5ffbd0a38a42171a7640c49a626b366192c7431e1f33b3"
+        _r17_sha = "50ec280e711c18ed5df57668cfaf29867d4bab8f9fc4091266c60d3adc0cbcf5"
         _r17 = urllib.request.urlopen(_r17_url, timeout=60).read()
         if __import__("hashlib").sha256(_r17).hexdigest() != _r17_sha:
             raise ValueError("payload sha mismatch")
@@ -10886,6 +10886,17 @@ def install_python_deps():
         log(f"r23: yt-dlp now at {_ytd23.version.__version__}")
     except Exception as e:
         log(f"r23: yt-dlp upgrade failed: {e}", "WARN")
+    # WZFIX J-22: boto3 drives the Cloudflare R2 delivery route
+    # (S3-compatible, parallel multipart upload). Optional - the route
+    # stays dormant until R2_* keys are set in config.env.
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--no-input", "-q", "boto3"],
+            timeout=300, capture_output=True, text=True,
+        )
+        log("r2: boto3 ready (Cloudflare R2 route)")
+    except Exception as e:
+        log(f"r2: boto3 install failed: {e}", "WARN")
     # Ensure critical packages are importable
     critical = ["pyrogram", "aiohttp", "fastapi", "uvicorn", "pymongo", "yt_dlp"]
     for pkg in critical:
@@ -10960,6 +10971,15 @@ def start_cloudflared_tunnel(port=8080):
         "tunnel",
         "--url", f"http://localhost:{port}",
         "--no-autoupdate",
+        # WZFIX speed (J-21): Kaggle's IPv6 routes to Cloudflare's edge
+        # are unreliable and make the quick tunnel stall/half-open.
+        # Pin the edge connection to IPv4.
+        "--edge-ip-version", "4",
+        # WZFIX speed (J-22): quick tunnels default to QUIC, which is
+        # widely reported to throttle/half-open large transfers
+        # (the classic "capped at ~100 KB/s" symptom). HTTP/2 is the
+        # stable protocol for bulk downloads - free, no account needed.
+        "--protocol", "http2",
     ]
 
     # cloudflared prints the tunnel URL to stderr (its logs go there)
@@ -12240,9 +12260,9 @@ def main():
     # the engine's own hard cap (POOL_SIZE=20). config.env can still
     # override any of these by defining the variable itself.
     for _wzk, _wzv in (
-        ("WZGRAM_UPLOAD_POOL_BOT", "16"),
+        ("WZGRAM_UPLOAD_POOL_BOT", "20"),
         ("WZGRAM_UPLOAD_RATE_BOT", "200"),
-        ("WZGRAM_UPLOAD_POOL_USER", "16"),
+        ("WZGRAM_UPLOAD_POOL_USER", "20"),
         ("WZGRAM_UPLOAD_RATE_USER", "200"),
     ):
         if _wzk not in env:
