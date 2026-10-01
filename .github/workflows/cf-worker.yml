@@ -1,0 +1,141 @@
+# ===========================================================================
+# Cloudflare Worker — pull / push  (WZFIX J-24)
+# ===========================================================================
+# Reads and deploys the Worker at twilight-thunder-4d48 using a Cloudflare
+# API token stored as a GitHub secret. This exists because the Cloudflare MCP
+# connector does not expose Workers-script tools, so CI is the way to touch it.
+#
+# SETUP (one time)
+#   1) Cloudflare dashboard -> My Profile -> API Tokens -> Create Token
+#        template: "Edit Cloudflare Workers"
+#        scope: your account (Joshifreefire.joshi@gmail.com's Account)
+#      copy the token secret.
+#   2) GitHub repo -> Settings -> Secrets and variables -> Actions -> New secret:
+#        CLOUDFLARE_API_TOKEN  = <the token>
+#        CLOUDFLARE_ACCOUNT_ID = b57e418ae51ac12fdb192ce8f9b999fe
+#   3) Actions -> "Cloudflare Worker (pull / push)" -> Run workflow:
+#        action = pull   -> downloads the live worker.js into wzfix_deploy/
+#        action = push   -> deploys wzfix_deploy/worker.js to Cloudflare
+#
+# The push uses PUT /workers/scripts/{name}/content which, per Cloudflare,
+# updates script content WITHOUT touching config or metadata - so your
+# TUNNEL_SECRET and any bindings are preserved.
+# ===========================================================================
+name: Cloudflare Worker (pull / push)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "pull = download live worker.js into the repo | push = deploy repo worker.js"
+        required: true
+        default: "pull"
+        type: choice
+        options:
+          - pull
+          - push
+      script_name:
+        description: "Worker script name"
+        required: true
+        default: "twilight-thunder-4d48"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cf-worker
+
+jobs:
+  cf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify the API token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set +e
+          curl -sS "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq .
+          echo "(status above must be \"active\"; otherwise the token is wrong)"
+
+      - name: Pull worker.js from Cloudflare
+        if: ${{ inputs.action == 'pull' }}
+        env:
+          ACC: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NAME: ${{ inputs.script_name }}
+        run: |
+          set -e
+          mkdir -p wzfix_deploy
+          echo "== GET /workers/scripts/$NAME =="
+          code=$(curl -sS -o /tmp/worker.js -w "%{http_code}" \
+            "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/$NAME" \
+            -H "Authorization: Bearer $TOKEN")
+          echo "status: $code  bytes: $(stat -c%s /tmp/worker.js 2>/dev/null)"
+          if [ "$code" != "200" ] || [ ! -s /tmp/worker.js ]; then
+            echo "== falling back to /content/v2 =="
+            curl -sS -o /tmp/worker.js -w "status: %{http_code}\n" \
+              "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/$NAME/content/v2" \
+              -H "Authorization: Bearer $TOKEN"
+          fi
+          # a module Worker may come back as multipart - extract the .js part
+          python3 - <<'PY'
+          data = open("/tmp/worker.js", "rb").read()
+          if b"Content-Disposition" in data[:4000]:
+              import re
+              m = re.match(rb"\s*--([^\r\n]+)", data)
+              if m:
+                  for part in data.split(b"--" + m.group(1)):
+                      head, _, body = part.partition(b"\r\n\r\n")
+                      if b".js" in head:
+                          open("/tmp/worker.js", "wb").write(body.rstrip(b"\r\n-"))
+                          print("extracted multipart js part")
+                          break
+          else:
+              print("raw content")
+          PY
+          cp /tmp/worker.js wzfix_deploy/worker.js
+          echo "--- first 300 bytes ---"
+          head -c 300 wzfix_deploy/worker.js; echo
+          echo "--- size: $(stat -c%s wzfix_deploy/worker.js) bytes ---"
+
+      - name: Commit the pulled worker.js
+        if: ${{ inputs.action == 'pull' }}
+        run: |
+          git config user.name "sarvam-test"
+          git config user.email "bot-test@users.noreply.github.com"
+          git add wzfix_deploy/worker.js
+          git commit -m "cf: pull worker.js from Cloudflare (${{ inputs.script_name }})" || echo "no changes"
+          git push || echo "nothing to push"
+
+      - name: Push worker.js to Cloudflare
+        if: ${{ inputs.action == 'push' }}
+        env:
+          ACC: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          NAME: ${{ inputs.script_name }}
+        run: |
+          set -e
+          F=wzfix_deploy/worker.js
+          [ -s "$F" ] || { echo "wzfix_deploy/worker.js missing or empty"; exit 1; }
+          if grep -q "export default" "$F"; then
+            META='{"main_module":"worker.js"}'
+            CT="application/javascript+module"
+          else
+            META='{"body_part":"worker.js"}'
+            CT="application/javascript"
+          fi
+          echo "metadata: $META"
+          curl -sS -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/$ACC/workers/scripts/$NAME/content" \
+            -H "Authorization: Bearer $TOKEN" \
+            -F "metadata=$META;type=application/json" \
+            -F "worker.js=@$F;type=$CT" | jq .
+          echo "== verifying /health =="
+          sleep 5
+          curl -sS -m 30 "https://$NAME.joshifreefire-joshi.workers.dev/health" || true
+          echo
