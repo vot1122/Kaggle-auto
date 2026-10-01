@@ -107,6 +107,17 @@ def _env2(key, default=""):
     return v or default
 
 
+def _cloud_route_name(s):
+    """J-22b: which cloud delivery route is live (r2|pixeldrain|none)."""
+    if (s.get("r2_endpoint") and s.get("r2_key_id")
+            and s.get("r2_secret") and s.get("r2_bucket")
+            and s.get("r2_public")):
+        return "r2"
+    if s.get("pd_key"):
+        return "pixeldrain"
+    return "none"
+
+
 async def _settings(force=False):
     """Cached (60 s) webdl settings dict."""
     global _SETTINGS_CACHE
@@ -136,6 +147,19 @@ async def _settings(force=False):
          # v19.2.1: quick accounts have their own switch (they are real,
          # traceable accounts - guests can stay off)
          "quick_mode": True}
+    # J-22b: R2 from config.env (DB/panel values below take precedence)
+    for _k2 in ("R2_ENDPOINT", "R2_KEY_ID", "R2_SECRET",
+                "R2_BUCKET", "R2_PUBLIC"):
+        _v2 = _env2(_k2)
+        if _v2:
+            s[_k2.lower()] = _v2
+    for _k2 in ("R2_LOW_GB", "R2_HIGH_GB"):
+        _v2 = _env2(_k2)
+        if _v2:
+            try:
+                s[_k2.lower()] = float(_v2)
+            except (TypeError, ValueError):
+                pass
     try:
         col = _db().wzfix_config[_part()]
         doc = await col.find_one({"_id": "webdl"}) or {}
@@ -181,6 +205,17 @@ async def _settings(force=False):
                     s[k] = float(doc[k])
                 except (TypeError, ValueError):
                     pass
+        # J-22b: R2 credentials + window, managed from /ws or the dashboard
+        for k in ("r2_endpoint", "r2_key_id", "r2_secret", "r2_bucket",
+                  "r2_public"):
+            if doc.get(k):
+                s[k] = str(doc[k])
+        for k in ("r2_low_gb", "r2_high_gb"):
+            if doc.get(k) is not None:
+                try:
+                    s[k] = float(doc[k])
+                except (TypeError, ValueError):
+                    pass
         if doc.get("maintenance") is not None:
             s["maintenance"] = bool(doc["maintenance"])
         if doc.get("announcement") is not None:
@@ -207,21 +242,6 @@ async def _settings(force=False):
         if v:
             try:
                 s[k.replace("WEBDL_", "").lower()] = cast(v)
-            except (TypeError, ValueError):
-                pass
-    # J-22: Cloudflare R2 credentials (config.env -> env). The route
-    # stays dormant until R2_ENDPOINT/R2_KEY_ID/R2_SECRET/R2_BUCKET/
-    # R2_PUBLIC are all present.
-    for _k2 in ("R2_ENDPOINT", "R2_KEY_ID", "R2_SECRET",
-                "R2_BUCKET", "R2_PUBLIC"):
-        _v2 = _env2(_k2)
-        if _v2:
-            s[_k2.lower()] = _v2
-    for _k2 in ("R2_LOW_GB", "R2_HIGH_GB"):
-        _v2 = _env2(_k2)
-        if _v2:
-            try:
-                s[_k2.lower()] = float(_v2)
             except (TypeError, ValueError):
                 pass
     s["conc"] = max(1, int(s["conc"]))
@@ -2469,7 +2489,19 @@ h+='<div class="card"><div class="tname">☁ Pixeldrain</div>'+
 '<div><div class="mut">up to (GB)</div><input id="cHigh" value="'+esc(pd.high_gb)+'"></div></div>'+
 '<div style="margin-top:11px"><button class="btn pri" data-act="csave">Save cloud</button></div>'+
 '<div class="hint">files in this range skip the direct link and go to the cloud, '+
-'so they still work after the bot sleeps.</div></div>'}
+'so they still work after the bot sleeps.</div></div>'+
+'<div class="card"><div class="tname">⚡ Cloudflare R2 (fast CDN)</div>'+
+'<div class="hint">status: '+(a.r2&&a.r2.on?'<b>ON</b> — large files go to R2 (free egress)':'<b>OFF</b> — fill the fields below')+'</div>'+
+'<div class="hint">live route: <b>'+esc(a.route||'none')+'</b></div>'+
+'<div class="grid2" style="margin-top:9px">'+
+'<div><div class="mut">S3 endpoint</div><input id="rEp" value="'+esc((a.r2&&a.r2.endpoint)||'')+'"></div>'+
+'<div><div class="mut">bucket</div><input id="rBk" value="'+esc((a.r2&&a.r2.bucket)||'')+'"></div>'+
+'<div><div class="mut">access key id</div><input id="rKid" value="'+esc((a.r2&&a.r2.key_id)||'')+'"></div>'+
+'<div><div class="mut">secret key'+((a.r2&&a.r2.secret_set)?' (set)':'')+'</div><input id="rSec" placeholder="'+((a.r2&&a.r2.secret_set)?'set — leave blank to keep':'paste secret')+'"></div>'+
+'<div><div class="mut">public base (r2.dev)</div><input id="rPub" value="'+esc((a.r2&&a.r2.public)||'')+'"></div>'+
+'<div><div class="mut">upload files over (GB)</div><input id="rLow" value="'+esc((a.r2&&a.r2.low_gb))+'"></div>'+
+'<div><div class="mut">up to (GB)</div><input id="rHigh" value="'+esc((a.r2&&a.r2.high_gb))+'"></div></div>'+
+'<div style="margin-top:11px"><button class="btn pri" data-act="r2save">Save R2</button></div></div>'}
 if(T.tab==='telegram'){
 var tg=a.tg||{};
 h+='<div class="card"><div class="tname">✈ Telegram routing</div>'+
@@ -2716,6 +2748,9 @@ toast('site saved ✓');if(b.default_theme)applyTheme(b.default_theme);loadAdm()
 'csave':function(){var lo=$('cLow'),hi=$('cHigh');
 var b={pd_low_gb:parseFloat(lo&&lo.value)||0,pd_high_gb:parseFloat(hi&&hi.value)||0};
 post('/webdl/api/admin/site',b).then(function(){toast('cloud window saved ✓');loadAdm()})},
+'r2save':function(){var g=function(i){var e=$(i);return e?e.value:''};
+var b={r2_endpoint:g('rEp'),r2_bucket:g('rBk'),r2_key_id:g('rKid'),r2_secret:g('rSec'),r2_public:g('rPub'),r2_low_gb:parseFloat(g('rLow'))||0,r2_high_gb:parseFloat(g('rHigh'))||0};
+post('/webdl/api/admin/site',b).then(function(){toast('R2 saved ✓');loadAdm()})},
 'tgtest':function(){$('tgOut').textContent='sending test messages…';
 post('/webdl/api/admin/tg_test',{}).then(function(d){
 var l=d.logs||{},f=d.files||{};
@@ -3642,6 +3677,17 @@ async def webdl_api(request):
             "pixeldrain": {"on": bool(s.get("pd_key")),
                            "low_gb": s.get("pd_low_gb", 0.1),
                            "high_gb": s.get("pd_high_gb", 0)},
+            "r2": {"on": bool(s.get("r2_endpoint") and s.get("r2_key_id")
+                             and s.get("r2_secret") and s.get("r2_bucket")
+                             and s.get("r2_public")),
+                   "low_gb": s.get("r2_low_gb", 0.1),
+                   "high_gb": s.get("r2_high_gb", 0),
+                   "endpoint": s.get("r2_endpoint", ""),
+                   "bucket": s.get("r2_bucket", ""),
+                   "key_id": s.get("r2_key_id", ""),
+                   "public": s.get("r2_public", ""),
+                   "secret_set": bool(s.get("r2_secret"))},
+            "route": _cloud_route_name(s),
             "slots": {"member": int(s.get("member_slots", 2)),
                       "guest": int(s.get("guest_slots", 2)),
                       "running": {"member": _running_pool("v"),
@@ -4109,6 +4155,22 @@ async def webdl_api(request):
                             upd[k] = v
                     except (TypeError, ValueError):
                         pass
+        # J-22b: R2 credentials + window from the dashboard
+        for k in ("r2_endpoint", "r2_bucket", "r2_key_id", "r2_public"):
+            if k in body:
+                _v = str(body[k]).strip()[:200]
+                if _v:
+                    upd[k] = _v
+        if "r2_secret" in body and str(body["r2_secret"]).strip():
+            upd["r2_secret"] = str(body["r2_secret"]).strip()[:200]
+        for k in ("r2_low_gb", "r2_high_gb"):
+            if k in body:
+                try:
+                    v = float(body[k])
+                    if 0 <= v <= 40:
+                        upd[k] = v
+                except (TypeError, ValueError):
+                    pass
         if upd:
             try:
                 col = _db().wzfix_config[_part()]
@@ -4117,7 +4179,7 @@ async def webdl_api(request):
             except Exception:
                 pass
             _SETTINGS_CACHE = (0, None)
-            _evt(f"admin site: { {k: v for k, v in upd.items() if k != 'pd_key'} }")
+            _evt(f"admin site: { {k: v for k, v in upd.items() if k not in ('pd_key', 'r2_secret')} }")
         return await _json(request, {"ok": True, "updated": upd})
 
     # invite codes: batch-generate / delete / list
