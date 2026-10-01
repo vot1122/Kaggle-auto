@@ -10884,13 +10884,14 @@ def start_cloudflared_tunnel(port=8080):
     ]
 
     # cloudflared prints the tunnel URL to stderr (its logs go there)
-    TUNNEL_PROCESS = subprocess.Popen(
+    _proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
     )
+    TUNNEL_PROCESS = _proc
 
     tunnel_url = None
     found_url = threading.Event()
@@ -10908,8 +10909,8 @@ def start_cloudflared_tunnel(port=8080):
         except Exception:
             pass
 
-    stderr_thread = threading.Thread(target=read_stream, args=(TUNNEL_PROCESS.stderr, "stderr"), daemon=True)
-    stdout_thread = threading.Thread(target=read_stream, args=(TUNNEL_PROCESS.stdout, "stdout"), daemon=True)
+    stderr_thread = threading.Thread(target=read_stream, args=(_proc.stderr, "stderr"), daemon=True)
+    stdout_thread = threading.Thread(target=read_stream, args=(_proc.stdout, "stdout"), daemon=True)
     stderr_thread.start()
     stdout_thread.start()
 
@@ -10917,12 +10918,12 @@ def start_cloudflared_tunnel(port=8080):
     if found_url.wait(timeout=60):
         log(f"Tunnel URL captured: {tunnel_url}")
         try:
-            TUNNEL_POOL.append((TUNNEL_PROCESS, tunnel_url))
+            TUNNEL_POOL.append((_proc, tunnel_url))
         except Exception:
             pass
         return tunnel_url
     else:
-        if TUNNEL_PROCESS.poll() is not None:
+        if _proc.poll() is not None:
             log("cloudflared process exited prematurely", "ERROR")
         else:
             log("Timed out waiting for tunnel URL (60s)", "ERROR")
