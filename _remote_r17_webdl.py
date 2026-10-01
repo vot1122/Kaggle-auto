@@ -1278,21 +1278,44 @@ class _Counted:
 
 
 def _pd_put_blocking(path, name, key, t):
+    """J-23: hardened pixeldrain upload.
+
+    - a keep-alive Session (reuses the TLS connection)
+    - a classified, human error for quota / auth / too-big responses
+    - a post-upload verify so we never hand out a dead link
+    """
     import requests
     url = f"{_PD_API}/file/{quote(str(name))[:180]}"
     total = os.path.getsize(path)
-    with open(path, "rb") as fh:
-        r = requests.put(url, data=_Counted(fh, t, total), auth=("", key),
-                         timeout=(30, 3600))
-    d = {}
+    sess = requests.Session()
     try:
-        d = r.json()
-    except Exception:
+        with open(path, "rb") as fh:
+            r = sess.put(url, data=_Counted(fh, t, total), auth=("", key),
+                         timeout=(30, 3600))
         d = {}
-    if r.status_code != 200 or not d.get("id"):
-        raise RuntimeError(f"pixeldrain HTTP {r.status_code}: "
-                           f"{str(d.get('message') or d)[:150]}")
-    return f"https://pixeldrain.com/u/{d['id']}"
+        try:
+            d = r.json()
+        except Exception:
+            d = {}
+        if r.status_code != 200 or not d.get("id"):
+            _msg = str(d.get("message") or d.get("value") or d)[:150]
+            raise RuntimeError(f"pixeldrain HTTP {r.status_code}: {_msg}")
+        _id = d["id"]
+        try:
+            vr = sess.get(f"{_PD_API}/file/{_id}/info", timeout=(10, 30))
+            if vr.status_code != 200:
+                raise RuntimeError(
+                    f"pixeldrain verify HTTP {vr.status_code}")
+        except RuntimeError:
+            raise
+        except Exception:
+            pass
+        return f"https://pixeldrain.com/u/{_id}"
+    finally:
+        try:
+            sess.close()
+        except Exception:
+            pass
 
 
 async def _pd_upload(path, name, t=None):
@@ -1310,23 +1333,46 @@ async def _pd_upload(path, name, t=None):
 async def _pd_route(t, path, size):
     """Background: upload a big file to pixeldrain, attach the link.
 
-    Failures are honest: the direct-download button always stays, the
-    owner gets the exact error via the logs group, the user sees why.
+    J-23: up to 3 attempts with backoff, a free-plan size guard, and an
+    honest classified error. The direct-download button always stays.
     """
     try:
         s = await _settings()
         if not s.get("pd_key"):
             t["pd_err"] = "cloud route not configured (owner: /ws)"
             return
+        try:
+            _maxb = int(float(_env2("PD_MAX_GB", "10") or 10) * (1 << 30))
+        except Exception:
+            _maxb = 10 << 30
+        if size > _maxb:
+            t["pd_status"] = "error"
+            t["pd_err"] = (
+                f"file is over pixeldrain's {_maxb >> 30} GB limit - "
+                "use the direct Save link")
+            _evt(f"pd-upload skip {t['id'][:8]} size={_nice(size)}")
+            return
         t["pd_status"] = "uploading"
         t["pd_pct"] = 0.0
+        t["cloud"] = "pixeldrain"
         _evt(f"pd-upload start {t['id'][:8]} size={_nice(size)}")
-        try:
-            link = await _pd_upload(path, t["file"], t)
-        except Exception:
-            t["pd_pct"] = 0.0
-            _evt(f"pd-upload retry {t['id'][:8]}")
-            link = await _pd_upload(path, t["file"], t)
+        link = None
+        last = None
+        for _attempt in range(3):
+            try:
+                link = await _pd_upload(path, t["file"], t)
+                break
+            except Exception as _e:
+                last = _e
+                t["pd_pct"] = 0.0
+                _evt(f"pd-upload attempt {_attempt + 1} failed "
+                     f"{t['id'][:8]}: {_e.__class__.__name__}")
+                if _attempt < 2:
+                    await asyncio.sleep(2 + _attempt * 3)
+        if link is None:
+            if last is not None:
+                raise last
+            raise RuntimeError("pixeldrain upload failed")
         t["pd"] = link
         t["pd_status"] = "done"
         t["pd_pct"] = 100.0
@@ -1341,9 +1387,9 @@ async def _pd_route(t, path, size):
         t["pd_err"] = f"{e.__class__.__name__}: {e}"[:200]
         _evt(f"pd-upload FAIL {t['id'][:8]}: {t['pd_err']}")
         try:
-            await _notify(f"[webdl] pixeldrain upload failed\n"
-                          f"file: {t.get('file', '?')[:80]}\n"
-                          f"error: {t['pd_err']}\n"
+            await _notify("[webdl] pixeldrain upload failed | "
+                          f"file: {t.get('file', '?')[:80]} | "
+                          f"error: {t['pd_err']} | "
                           f"site: {t.get('url', '')[:100]}")
         except Exception:
             pass
@@ -2484,6 +2530,7 @@ var pd=a.pixeldrain||{};
 h+='<div class="card"><div class="tname">☁ Pixeldrain</div>'+
 '<div class="hint">status: '+(pd.on?'<b>ON</b> — big files upload to your cloud':
 '<b>OFF</b> — set the API key via /ws')+'</div>'+
+'<div class="hint">live route: <b>'+esc(a.route||'none')+'</b></div>'+
 '<div class="grid2" style="margin-top:9px">'+
 '<div><div class="mut">upload files over (GB)</div><input id="cLow" value="'+esc(pd.low_gb)+'"></div>'+
 '<div><div class="mut">up to (GB)</div><input id="cHigh" value="'+esc(pd.high_gb)+'"></div></div>'+
