@@ -28,9 +28,7 @@
 ================================================================================
 """
 
-# ============================================================================
 # SECTION 0 — IMPORTS & CONSTANTS
-# ============================================================================
 
 import os
 import sys
@@ -49,14 +47,10 @@ import urllib.error
 import threading
 from datetime import datetime, timezone, timedelta
 
-# ---------------------------------------------------------------------------
 # IST timezone (UTC+5:30)
-# ---------------------------------------------------------------------------
 IST = timezone(timedelta(hours=5, minutes=30))
 
-# ---------------------------------------------------------------------------
 # Paths
-# ---------------------------------------------------------------------------
 KAGGLE_WORKING = "/kaggle/working"
 WZMLX_DIR = os.path.join(KAGGLE_WORKING, "WZML-X")
 CONFIG_SRC = "/kaggle/input/wzmlx-config/config.env"
@@ -65,36 +59,27 @@ CLOUDFLARED_BIN = os.path.join(KAGGLE_WORKING, "cloudflared")
 PATCH_TMP_DIR = os.path.join(KAGGLE_WORKING, "_patches")
 DOWNLOAD_DIR_DEFAULT = os.path.join(KAGGLE_WORKING, "downloads")
 
-# ---------------------------------------------------------------------------
 # Cloudflared download URL (latest release, linux-amd64)
-# ---------------------------------------------------------------------------
 CLOUDFLARED_URL = (
     "https://github.com/cloudflare/cloudflared/releases/latest/download/"
     "cloudflared-linux-amd64"
 )
 
-# ---------------------------------------------------------------------------
 # Tunnel capture: regex for https://*.trycloudflare.com
-# ---------------------------------------------------------------------------
 TUNNEL_URL_RE = re.compile(r"https://[a-z0-9-]+\.trycloudflare\.com")
 
-# ---------------------------------------------------------------------------
 # Self-termination window (seconds): 9.5 h to 10.0 h
-# ---------------------------------------------------------------------------
 MIN_RUNTIME = int(9.5 * 3600)   # 34200 s
 MAX_RUNTIME = int(10.0 * 3600)  # 36000 s
 
-# ---------------------------------------------------------------------------
 # Startup delay window (seconds): 10 s to 120 s
-# ---------------------------------------------------------------------------
 MIN_STARTUP_DELAY = 10
 MAX_STARTUP_DELAY = 120
 
-# ---------------------------------------------------------------------------
 # Bot process handle (global so signal handlers can reach it)
-# ---------------------------------------------------------------------------
 BOT_PROCESS = None
 TUNNEL_PROCESS = None
+TUNNEL_POOL = []  # WZFIX J-24: (proc, url) pairs for the warm pool
 SHUTDOWN_EVENT = threading.Event()
 NOTIFIED_STREAM_READY = False
 
@@ -167,9 +152,7 @@ def _r19_start_watchdog():
     _r19th.start()
 
 
-# ============================================================================
 # SECTION 1 — LOGGING HELPER
-# ============================================================================
 
 _LOG_RING = []  # WZFIX r25c29: last 800 kernel log lines (diagnostics)
 
@@ -188,9 +171,7 @@ def now_ist_str():
     return datetime.now(IST).strftime("%d %b %Y, %I:%M:%S %p IST")
 
 
-# ============================================================================
 # SECTION 2 — CONFIG PARSING
-# ============================================================================
 
 def parse_config(config_path):
     """
@@ -223,11 +204,7 @@ def parse_config(config_path):
     return config
 
 
-# ============================================================================
 # SECTION 2.5 — ERROR DIAGNOSIS ENGINE
-# ============================================================================
-# Every error signature below is translated into its actual cause and the fix,
-# so the log explains WHY something failed instead of just showing the error.
 
 DIAGNOSES = [
     ("AUTH_KEY_UNREGISTERED",
@@ -308,9 +285,7 @@ def log_diagnosis(text, seen=None):
         log(f"DIAGNOSIS >> {explanation}", "WARN")
 
 
-# ============================================================================
 # SECTION 3 — NOTIFICATION (Telegram + ntfy.sh)
-# ============================================================================
 
 def send_telegram(bot_token, chat_id, text):
     """
@@ -352,7 +327,6 @@ def send_ntfy(topic, title, message, tags=None):
         log("ntfy: missing topic, skipping", "WARN")
         return False
     url = f"https://ntfy.sh/{topic}"
-    # HTTP headers must be latin-1 safe (em dash in titles crashes urllib)
     safe_title = title.encode("latin-1", "replace").decode("latin-1")
     headers = {
         "Title": safe_title,
@@ -415,17 +389,10 @@ def notify(config, event, extra=""):
         log("ntfy skipped: NTFY_TOPIC not set", "WARN")
 
 
-# ============================================================================
 # SECTION 4 — EMBEDDED PATCH SCRIPTS (base64-encoded)
-# ============================================================================
-# Each patch is a standalone Python script that takes a file path as argv[1]
 # and modifies that file in-place. The scripts are base64-encoded here to
-# avoid quoting issues, decoded at runtime, written to temp files, and run
 # via subprocess against the corresponding WZML-X source file.
-# ============================================================================
 
-# Each entry: (patch_name, target_file_relative_to_WZMLX, base64_encoded_script)
-# The script is decoded at runtime and run via subprocess against the target.
 PATCH_DATA = [
     ('patch_cm.py',
      'bot/core/config_manager.py',
@@ -487,9 +454,7 @@ PATCH_DATA = [
 ]
 
 
-# ============================================================================
 # SECTION 5 — PATCH APPLICATION
-# ============================================================================
 
 def write_patch_scripts():
     """Decode and write all embedded patch scripts to PATCH_TMP_DIR."""
@@ -508,8 +473,6 @@ def apply_patches():
     log("=" * 60)
     log("Applying source patches")
     log("=" * 60)
-    # These patches are superseded by the WZML-X-Bot patch kit (the battle-
-    # tested patch set from the user's GitHub Actions deployment), which is
     # applied right after this step by apply_userrepo_patches().
     retired = {
         "patch_db.py", "patch_tstream.py", "patch_sserv.py", "patch_tmon.py",
@@ -546,12 +509,8 @@ def apply_patches():
     log("All patches applied")
 
 
-# ============================================================================
 # WZML-X-BOT PATCH KIT (user stream + UI + stream authentication)
-# ============================================================================
 # The patch kit is downloaded at runtime from the user's own repository
-# (hackaking20/WZML-X-Bot) — the same patch set the working GitHub Actions
-# deployment applies, in the same order. Keeping it runtime-fetched means any
 # future tweak to that repo flows into the Kaggle bot automatically.
 
 AUTH_BANNER_HTML = """<style>
@@ -1358,7 +1317,6 @@ WZFIX_R1_CORE_B64 = (
     "ICAgY3Vyc29yID0gX2RiKCkud3pmaXhfdXNlcnNbX3BhcnQoKV0uZmluZCgpLnNvcnQoImxhc3RfdXNlZCIsIC0xKQogICAgICAg"
     "IHJldHVybiBbZCBhc3luYyBmb3IgZCBpbiBjdXJzb3JdCiAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgIHJldHVybiBbXQo="
 )
-# bot/helper/wzfix/r3_music.py — music app integrations (Spotify / JioSaavn / Apple Music)
 
 WZFIX_R3_MUSIC_B64 = (
     "IyBXWkZJWCBSb3VuZCAzIOKAlCBtdXNpYyBhcHAgaW50ZWdyYXRpb25zICh2MTUuNzQpLiBTcG90"
@@ -5454,15 +5412,10 @@ def apply_userrepo_patches():
     # Kaggle addition B — (v15.6) RETIRED: the kit password modal
     # (stall_ui.js "Stream Password" overlay, shown automatically when a
     # user-account stream returns 401) is the single auth UI. Our banner
-    # duplicated it, appeared on bot-account streams, and stored the token
     # in a different format under the same localStorage key.
     log("  auth banner: retired in v15.6 — kit password overlay is authoritative")
 
-    # Kaggle addition C — v15.1 aesthetic overhaul: completely restyled design
     # (new typography, animated aurora backdrop, glass chrome, cinematic
-    # player frame, polished controls) + 3 new themes (Onyx Noir, Ocean Aqua,
-    # Ember Glow) registered into the existing theme switcher alongside the
-    # original four. Every layer is built on the theme CSS variables, so all
     # 7 themes share the new look.
     for page_rel in (html_rel, landing_rel):
         page_path = os.path.join(WZMLX_DIR, page_rel)
@@ -5489,12 +5442,6 @@ def apply_userrepo_patches():
         except Exception as e:
             log(f"  ui revamp: FAILED on {page_rel} — {e}", "ERROR")
 
-    # Kaggle addition D — v15.2 player unification + mobile performance fixes.
-    # The template swaps <video id="player"> for a <libmedia-video> WebCodecs
-    # element when the file can't play natively (MKV/HEVC...), which left the
-    # kit's control buttons bound to the dead element (only QR kept working).
-    # This layer injects a unified control bar that resolves the active player
-    # at click time, plus a stall-overlay suppressor that hides the "Wait a bit
     # more / Retry" banner whenever playback time is actually advancing.
     stream_fix_path = os.path.join(WZMLX_DIR, html_rel)
     if os.path.isfile(stream_fix_path):
@@ -5587,13 +5534,8 @@ def apply_userrepo_patches():
             log(f"  boot probe: FAILED — {e}", "ERROR")
 
     # Kaggle addition G — v15.5 stream telemetry.
-    # With STREAM_PASS set the page authenticates and the server OPENS the
     # stream (see "UserStream: opened" logs) yet the browser receives no
     # data and the player retries until it gives up. Nothing errors
-    # server-side, so this instruments the exact data path: every /_stream
-    # request is logged with its auth state and Range, and every response is
-    # logged with bytes delivered and the abort cause. The matching browser
-    # watchdog (in the control bar) shows the player's own view of the same
     # request, so the next log pinpoints which layer dies.
     tel_path = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
     if os.path.isfile(tel_path):
@@ -5708,9 +5650,6 @@ def apply_userrepo_patches():
             log(f"  telemetry: FAILED — {e}", "ERROR")
 
     # Kaggle addition H — v15.6 live-password auth bridge.
-    # wserver is a separate process: it reads env/config.env at startup and
-    # NEVER sees /bs-saved STREAM_PASS, so /api/stream_auth kept answering
-    # "STREAM_PASS not set" (correct passwords rejected) while the bot-side
     # gate enforced the password anyway. Fix: an internal /_auth route on
     # the bot stream server (which holds the LIVE config and sees /bs
     # changes instantly) checks passwords and mints tokens; wserver
@@ -6476,10 +6415,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r16: FAILED - {e}", "ERROR")
 
-    # Kaggle addition I — v15.7 Round 1: per-user bandwidth quota + download
     # library, owner cap commands, and DB stats/cleanup.
-    # Two new self-contained modules are written into the tree; three small
-    # hooks wire them into the task pipeline. Everything fails open: a quota
     # error must never block a download.
     try:
         wzfix_dir = os.path.join(WZMLX_DIR, "bot/helper/wzfix")
@@ -6513,7 +6449,6 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r1: module write FAILED — {e}", "ERROR")
 
-    # I-2: quota enforcement — limit_checker (size-aware) + pre_task_check
     tm_path = os.path.join(WZMLX_DIR, "bot/helper/ext_utils/task_manager.py")
     try:
         with open(tm_path, "r", encoding="utf-8") as f:
@@ -6628,7 +6563,6 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r1: task_listener patch FAILED — {e}", "ERROR")
 
-    # I-3b: reservations — free a task's bandwidth hold when it fails or is
     # cancelled (completion releases it from record_task itself)
     try:
         with open(tl_path, "r", encoding="utf-8") as f:
@@ -6770,8 +6704,6 @@ async def _wzfix_record_start(message):
 
     # Kaggle addition J — v15.8 Round 2 Phase A: owner web dashboard
     # (served at /wzadmin from the bot's own stream server, so it reads
-    # task_dict + DB directly) + wserver /wzadmin proxy + heartbeat watchdog
-    # (alerts LOG_CHAT if the bot stops answering /_ping for 30+ minutes).
     try:
         _r2 = os.path.join(WZMLX_DIR, "bot/helper/wzfix/r2_web.py")
         with open(_r2, "w", encoding="utf-8") as f:
@@ -6863,7 +6795,6 @@ async def _wzfix_record_start(message):
                           '        _r = web.json_response(await _state())\n'
                           '        _r.headers["Cache-Control"] = "no-store"\n'
                           '        return _r', "O-4b")
-            # O-5: fix addition-M quoting regression (black page root cause)
             for _actn in ("userauth", "usersudo", "userbl"):
                 _src = _r9_rep(
                     _src,
@@ -6982,7 +6913,6 @@ async def _wzfix_record_start(message):
         log(f"  r9: stall_ui patch FAILED — {e}", "ERROR")
 
     try:
-        # ---- O-C: stream_server.py (auth logging + log-group alerts) ----
         _o_ss = os.path.join(WZMLX_DIR, "bot/core/stream_server.py")
         with open(_o_ss, "r", encoding="utf-8") as _f:
             _py = _f.read()
@@ -7609,7 +7539,6 @@ async def _wzfix_record_start(message):
         log(f"  r2: wserver patch FAILED — {e}", "ERROR")
 
 
-    # J-3: landing page — add the Owner Dashboard link alongside the others
     try:
         lp_path = os.path.join(WZMLX_DIR, "web/templates/landing.html")
         with open(lp_path, "r", encoding="utf-8") as f:
@@ -7637,9 +7566,6 @@ async def _wzfix_record_start(message):
         log(f"  r2: landing page patch FAILED — {e}", "ERROR")
 
     # J-4: aria2 size-check callback hardening. Upstream checks the size
-    # ~3s after the download already started, and silently skips the whole
-    # check when the task is not registered in task_dict yet (a race right
-    # after addUri). Wait for the registration with bounded retries so the
     # quota check always runs.
     try:
         a2_path = os.path.join(WZMLX_DIR, "bot/helper/listeners/aria2_listener.py")
@@ -8433,7 +8359,6 @@ async def _wzfix_record_start(message):
         log(f"  r2: flood cap patch FAILED — {e}", "ERROR")
 
     # J-16: /log — send only the log TAIL as the document (the full file
-    # can take 10-15s+ to upload), tail-read the disp/web views instead of
     # loading the whole file into memory, and move the blocking paste
     # request into a thread so it stops freezing the whole bot.
     try:
@@ -8698,7 +8623,6 @@ async def _wzfix_record_start(message):
                 log(f"  r2: {os.path.basename(_rel)} music hook already applied")
                 continue
             if _anchor in _t:
-                # ytdlp: the anchor line must directly follow the def line;
                 # mirror: the anchor sits after the enable/disable checks
                 _old = (_prefix + _anchor) if _prefix else _anchor
                 _new = (_prefix + _hook + _anchor) if _prefix else (_hook + _anchor)
@@ -10347,16 +10271,7 @@ async def _wzfix_record_start(message):
     except Exception as e:
         log(f"  r25: FAILED - {e}", "ERROR")
 
-    # Kaggle addition R17 — Round 17 (v15.84): web downloader (remote payload).
-    # The bot becomes a downloader site: paste a link on the web page, the
-    # bot's yt-dlp engine grabs it and the finished file downloads straight
-    # to the user's device. Frontend: GET /webdl on the worker URL + GitHub
-    # Pages (vot1122.github.io/ytwebdownload). The module + route patches
     # live outside the notebook (kernel source must stay < 1 MB): the
-    # payload is Drive-hosted and sha256-pinned, same as _real_deploy_patch.
-    # NOTE: no bare "import urllib/hashlib" here — a local import would make
-    # "urllib" function-local and break the patch-kit download above (the
-    # v15.84.0 bug: UnboundLocalError -> whole kit skipped). Module-level
     # urllib.request is used as-is; hashlib comes in via __import__.
     # Fails safe - on any error the bot boots without /webdl.
     try:
@@ -10390,7 +10305,6 @@ async def _wzfix_record_start(message):
 
 
 
-# ─── v15.1 aesthetic overhaul assets ────────────────────────────────────
 
 REVAMP_FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">'
 
@@ -10419,7 +10333,6 @@ def apply_sed_patches():
     log("Applying inline sed patches")
     log("=" * 60)
 
-    # --- Patch 1: yt_dlp_download.py — broader exception + socket timeout ---
     ytdlp_path = os.path.join(
         WZMLX_DIR,
         "bot/helper/mirror_leech_utils/download_utils/yt_dlp_download.py",
@@ -10507,9 +10420,7 @@ def apply_sed_patches():
     log("Inline sed patches complete")
 
 
-# ============================================================================
 # SECTION 6 — SYSTEM PACKAGES & PYTHON DEPS
-# ============================================================================
 
 def _port_open(host, port, timeout=3):
     try:
@@ -10551,13 +10462,7 @@ def setup_wzml_services(config):
         log(f"Failed to write wz_bin shim: {e}", "ERROR")
 
     # (a2) mega SDK stub module
-    # `bot/.../mega_upload.py` and `mega_listener.py` import the compiled
-    # MEGA SDK bindings (`from mega import MegaApi, ...`) unconditionally at
-    # module load time. The SDK is baked into the Docker base image but has no
-    # prebuilt wheel on PyPI (building it needs swig + 15+ min). The bot's own
     # code is already defensive (checks `MegaCancelToken is None`, and
-    # add_mega_upload bails out unless MEGA credentials are configured), so a
-    # stub module is safe: it satisfies the imports and only raises if someone
     # actually attempts a MEGA transfer.
     try:
         mega_pkg_dir = os.path.join(WZMLX_DIR, "mega")
@@ -10715,8 +10620,6 @@ class MegaUploadOptions:
             pass
         try:
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            # aria2c daemonizes (forks) before binding the RPC port, so the
-            # first port probe can race ahead of the daemon. Retry briefly.
             _up = False
             for _ in range(6):
                 if _port_open("127.0.0.1", 6800):
@@ -10914,9 +10817,7 @@ def install_python_deps():
                 pass
 
 
-# ============================================================================
 # SECTION 7 — CLOUDFLARE TUNNEL
-# ============================================================================
 
 def download_cloudflared():
     """Download the cloudflared binary to /kaggle/working/cloudflared."""
@@ -11015,6 +10916,10 @@ def start_cloudflared_tunnel(port=8080):
     # Wait for URL or timeout (60s)
     if found_url.wait(timeout=60):
         log(f"Tunnel URL captured: {tunnel_url}")
+        try:
+            TUNNEL_POOL.append((TUNNEL_PROCESS, tunnel_url))
+        except Exception:
+            pass
         return tunnel_url
     else:
         if TUNNEL_PROCESS.poll() is not None:
@@ -11024,11 +10929,54 @@ def start_cloudflared_tunnel(port=8080):
         return None
 
 
-# ============================================================================
-# SECTION 8 — CLOUDFLARE WORKER SYNC
-# ============================================================================
+def _live_pool_urls():
+    """WZFIX J-24: URLs of the pool tunnels whose process is alive."""
+    out = []
+    try:
+        for _p, _u in list(TUNNEL_POOL):
+            try:
+                if _p is not None and _p.poll() is None and _u:
+                    out.append(_u)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return out
 
-def sync_to_worker(config, tunnel_url):
+
+def start_tunnel_pool(port=8080, n=4):
+    """WZFIX J-24: start a warm pool of quick tunnels.
+
+    Each tunnel is an independent edge connection to the same origin,
+    registered together with the Worker so a large direct download can
+    be split across them. They start in parallel, so boot time stays
+    about one tunnel. The pool is kept warm (not spun up per task):
+    cloudflared takes 5-60 s to come up, which would delay every
+    download. config.env WZFIX_TUNNEL_POOL overrides the count.
+    """
+    n = max(1, int(n or 1))
+    results = [None] * n
+
+    def _one(i):
+        try:
+            results[i] = start_cloudflared_tunnel(port=port)
+        except Exception as e:
+            log(f"tunnel pool #{i} failed: {e}", "WARN")
+
+    threads = [threading.Thread(target=_one, args=(i,), daemon=True)
+               for i in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=90)
+    urls = [u for u in results if u]
+    log(f"tunnel pool ready: {len(urls)}/{n} tunnel(s) up")
+    return urls
+
+
+# SECTION 8 — CLOUDFLARE WORKER SYNC
+
+def sync_to_worker(config, tunnel_url, tunnel_urls=None):
     """
     POST the tunnel URL to the Cloudflare Worker.
 
@@ -11056,12 +11004,14 @@ def sync_to_worker(config, tunnel_url):
     if params:
         endpoint += "?" + urllib.parse.urlencode(params)
 
-    body = json.dumps({"url": tunnel_url}).encode("utf-8")
+    _body_obj = {"url": tunnel_url}
+    if tunnel_urls:
+        _body_obj["urls"] = list(tunnel_urls)
+    body = json.dumps(_body_obj).encode("utf-8")
 
     req = urllib.request.Request(endpoint, data=body, method="POST")
     req.add_header("Content-Type", "application/json")
     req.add_header("X-Tunnel-Secret", worker_secret)
-    # Cloudflare's Browser Integrity Check on workers.dev rejects the default
     # python-urllib User-Agent with "error code: 1010" before the request
     # ever reaches the Worker. Present a normal browser UA instead.
     req.add_header(
@@ -11109,9 +11059,7 @@ def sync_to_worker(config, tunnel_url):
         return False
 
 
-# ============================================================================
 # SECTION 9 — CONFIG INJECTION (BASE_URL)
-# ============================================================================
 
 def inject_base_url(config_path, worker_url):
     """
@@ -11141,7 +11089,6 @@ def inject_base_url(config_path, worker_url):
             base_url_found = True
             continue
 
-        # Handle commented BASE_URL (e.g. "# BASE_URL = ..." or "#BASE_URL = ...")
         uncommented = stripped.lstrip("#").strip()
         if uncommented.startswith("BASE_URL") and "=" in uncommented and not uncommented.startswith("BASE_URL_PORT"):
             if stripped.startswith("#"):
@@ -11171,9 +11118,7 @@ def inject_base_url(config_path, worker_url):
     log(f"Injected BASE_URL = {worker_url} into config.env")
 
 
-# ============================================================================
 # SECTION 10 — DOWNLOAD CLEANUP
-# ============================================================================
 
 def cleanup_downloads(download_dir):
     """Remove old download files to free disk space."""
@@ -11212,9 +11157,7 @@ def cleanup_downloads(download_dir):
         log("No old downloads to clean")
 
 
-# ============================================================================
 # SECTION 11 — SELF-TERMINATION TIMER
-# ============================================================================
 
 def self_termination_timer():
     """
@@ -11230,7 +11173,6 @@ def self_termination_timer():
     hours = runtime / 3600
     log(f"Self-termination timer set: {hours:.1f}h ({runtime}s)")
 
-    # Sleep until it's time to terminate, checking SHUTDOWN_EVENT each second
     for _ in range(runtime):
         if SHUTDOWN_EVENT.is_set():
             return
@@ -11261,16 +11203,9 @@ def self_termination_timer():
     SHUTDOWN_EVENT.set()
 
 
-# ============================================================================
 # SECTION 11.5 — SESSION LOCK (single active instance per notebook)
-# ============================================================================
-# Kaggle does not expose a public API to stop a previous session of a kernel,
 # and two simultaneous sessions would run two bots on the same tokens
-# (Telegram update-stealing conflicts). Instead we use a lease in the shared
-# MongoDB: every session generates its own ID, claims the lock document, and
 # a background thread verifies ownership every 45 seconds. When a NEWER
-# session claims the lock, any older session of this notebook detects it and
-# terminates itself gracefully. This keeps exactly one bot running at any time.
 
 SESSION_ID = f"{int(time.time())}-{random.randint(100000, 999999)}"
 _SESSION_LOCK_DB = "wzml_kaggle"
@@ -11455,9 +11390,7 @@ def session_lock_monitor(config):
             mismatches = 0
 
 
-# ============================================================================
 # SECTION 12 — SIGNAL HANDLERS
-# ============================================================================
 
 def handle_signal(signum, frame):
     """Handle SIGINT/SIGTERM — forward to the bot process."""
@@ -11471,9 +11404,7 @@ def handle_signal(signum, frame):
             pass
 
 
-# ============================================================================
 # SECTION 13 — MAIN ORCHESTRATION
-# ============================================================================
 
 def _run_worker_branch(config):
     """WZFIX r25c (v15.83): Phase B worker session — same engine stack
@@ -11511,9 +11442,7 @@ def main():
     # finally block's cleanup_downloads() still has a valid path
     download_dir = DOWNLOAD_DIR_DEFAULT
 
-    # ------------------------------------------------------------------
     # Step 0: Random startup delay (10–120 s) for fingerprint variation
-    # ------------------------------------------------------------------
     _WORKER25 = os.environ.get("WZFIX_WORKER") == "1"
     if _WORKER25:
         delay = 0
@@ -11523,17 +11452,13 @@ def main():
         log(f"Startup delay: {delay}s (fingerprint variation)")
         time.sleep(delay)
 
-    # ------------------------------------------------------------------
     # Step 1: Parse config
-    # ------------------------------------------------------------------
     log("=" * 60)
     log("WZML-X Kaggle Runner — Starting")
     log("=" * 60)
 
     if not os.path.isfile(CONFIG_SRC):
         # WZFIX r25c5 (v15.83.5): kernels created through the API mount
-        # datasets under /kaggle/input/datasets/<owner>/<slug>/ instead of
-        # the flat UI layout — resolve the real config path once, up front
         # (also affects every later use through the module global).
         import glob as _g25
 
@@ -11577,9 +11502,7 @@ def main():
         )
         notify(config, "start", start_msg)
 
-    # ------------------------------------------------------------------
     # Step 2: Clone WZML-X
-    # ------------------------------------------------------------------
     log("=" * 60)
     log("Cloning WZML-X repository (wzv3 branch)")
     log("=" * 60)
@@ -11600,7 +11523,6 @@ def main():
         # WZFIX r25c33: pin to the last-known-good wzv3 commit. Upstream
         # drifted to ab6464d2 on 28 Sep and broke the wserver lifespan
         # (ClientTimeout), moved bot.ext_utils (playlists 500s) and
-        # invalidated patch anchors. All patches are validated on 6cc2760.
         _pin = "6cc2760ab1c95a8e05661f10b8ee0b2f499dbe39"
         _ok = False
         _pr = subprocess.run(
@@ -11648,9 +11570,7 @@ def main():
         notify(config, "crash", f"Git clone failed: {e}")
         return
 
-    # ------------------------------------------------------------------
     # Step 3: Copy config.env into the repo
-    # ------------------------------------------------------------------
     log("Copying config.env into WZML-X directory")
     shutil.copy2(CONFIG_SRC, CONFIG_DST)
 
@@ -11663,17 +11583,13 @@ def main():
     os.makedirs(download_dir, exist_ok=True)
     cleanup_downloads(download_dir)
 
-    # ------------------------------------------------------------------
     # Step 4: Write & apply patches
-    # ------------------------------------------------------------------
     write_patch_scripts()
     apply_patches()
     apply_sed_patches()
     apply_userrepo_patches()
 
-    # ------------------------------------------------------------------
     # Step 5: Install system packages and Python deps
-    # ------------------------------------------------------------------
     install_system_packages()
     install_python_deps()
 
@@ -11850,16 +11766,12 @@ def main():
         log(f"yt-dlp guard failed: {_ye}", "WARN")
     setup_wzml_services(config)
 
-    # ------------------------------------------------------------------
-    # ------------------------------------------------------------------
     # Step 5.5: WZFIX r25c — Phase B worker branch (headless)
-    # ------------------------------------------------------------------
     if _WORKER25:
         _run_worker_branch(config)
         return
 
     # Step 6: Download cloudflared and start tunnel
-    # ------------------------------------------------------------------
     log("=" * 60)
     log("Setting up Cloudflare tunnel")
     log("=" * 60)
@@ -11867,13 +11779,19 @@ def main():
     if not download_cloudflared():
         log("cloudflared download failed — bot will run without tunnel", "WARN")
     else:
-        tunnel_url = start_cloudflared_tunnel(port=8080)
+        try:
+            _pool_n = max(1, int(os.environ.get("WZFIX_TUNNEL_POOL", "4") or 4))
+        except Exception:
+            _pool_n = 4
+        tunnel_urls = start_tunnel_pool(port=8080, n=_pool_n)
+        tunnel_url = tunnel_urls[0] if tunnel_urls else None
 
         if tunnel_url:
-            log(f"Tunnel is live: {tunnel_url}")
+            log(f"Tunnel pool live: {len(tunnel_urls)} tunnel(s): "
+                f"{', '.join(tunnel_urls)}")
 
-            # Sync tunnel URL to Cloudflare Worker
-            worker_synced = sync_to_worker(config, tunnel_url)
+            # Sync the whole pool to Cloudflare Worker (primary + extras)
+            worker_synced = sync_to_worker(config, tunnel_url, tunnel_urls)
 
             # Determine the BASE_URL to inject
             worker_url = config.get("WORKER_URL", "").strip().strip("/")
@@ -11901,17 +11819,13 @@ def main():
             log("Tunnel setup failed — continuing without tunnel", "WARN")
             notify(config, "stream_ready", "Tunnel setup failed — running without web UI")
 
-    # ------------------------------------------------------------------
     # Step 6.5: Take over from a previous still-running notebook session
     # (pings its web UI, stops it after 3 confirmations — see
     # stop_previous_instance above)
-    # ------------------------------------------------------------------
     stop_previous_instance(tunnel_url, config.get("DATABASE_URL", ""))
 
-    # ------------------------------------------------------------------
     # Step 6.6: WZFIX r25c28 - tunnel watchdog: if the public tunnel
     # goes dark, restart cloudflared and re-register with the worker.
-    # ------------------------------------------------------------------
     def _r28_tunnel_watchdog():  # WZFIX r25c28
         import time as _t
         import urllib.request as _u
@@ -11957,8 +11871,8 @@ def main():
                     if _new:
                         _turl = _new
                         log(f"r25c28: new tunnel {_new}")
-                        if sync_to_worker(config, _new):
-                            log("r25c28: worker re-registered")
+                        if sync_to_worker(config, _new, _live_pool_urls()):
+                            log("r25c28: worker re-registered (pool)")
                     else:
                         log("r25c28: cloudflared restart FAILED", "ERROR")
                     _fails = 0
@@ -11966,12 +11880,10 @@ def main():
 
     threading.Thread(target=_r28_tunnel_watchdog, daemon=True).start()  # WZFIX r25c28
 
-    # ------------------------------------------------------------------
     # Step 6.7: WZFIX r25c29 - log shipper: push a full diagnostics
     # bundle (kernel log ring + gunicorn log + bot log + process and
     # socket state) to the private Kaggle dataset djoshi7/wzmlx-logs
     # every 2 minutes, so logs can be fetched from outside.
-    # ------------------------------------------------------------------
     def _r29_log_shipper():  # WZFIX r25c29
         import time as _t
         import json as _json
@@ -12038,8 +11950,6 @@ def main():
                     or (os.environ.get("KAGGLE_USERNAME")
                         and os.environ.get("KAGGLE_KEY"))
                 ):
-                    # WZFIX r25c30: only try the dataset push when kernel-side
-                    # credentials exist (plain sessions have none - that is
                     # why wzmlx-logs never appeared; logs are served via
                     # wserver /_diag/logs instead now)
                     _r = _sp.run(
@@ -12065,13 +11975,11 @@ def main():
 
     threading.Thread(target=_r29_log_shipper, daemon=True).start()  # WZFIX r25c29
 
-    # ------------------------------------------------------------------
     # Step 6.8: WZFIX r25c31 - fallback web server. While gunicorn is
     # dead, the notebook serves /_diag/logs and a maintenance page on
     # port 8080 itself, so the tunnel/worker path stays alive and logs
     # stay fetchable from outside. Every ~6.5 min the port is released
     # for 90 s so gunicorn restarts (r25c28 watchdog) can rebind.
-    # ------------------------------------------------------------------
     def _r31_fallback_web():  # WZFIX r25c31
         import http.server as _hs31
         import socket as _sk31
@@ -12207,9 +12115,7 @@ def main():
 
     threading.Thread(target=_r31_fallback_web, daemon=True).start()  # WZFIX r25c31
 
-    # ------------------------------------------------------------------
     # Step 7: Claim the session lock + start the self-termination timer
-    # ------------------------------------------------------------------
     if acquire_session_lock(config.get("DATABASE_URL", "")):
         lock_thread = threading.Thread(
             target=session_lock_monitor,
@@ -12220,9 +12126,7 @@ def main():
     timer_thread = threading.Thread(target=self_termination_timer, daemon=True)
     timer_thread.start()
 
-    # ------------------------------------------------------------------
     # Step 8: Start the bot via `python -m bot`
-    # ------------------------------------------------------------------
     log("=" * 60)
     log("Starting WZML-X bot (python -m bot)")
     log("=" * 60)
@@ -12233,14 +12137,8 @@ def main():
     # lives in KAGGLE_WORKING/bin - put it on the bot PATH
     env["PATH"] = os.path.join(KAGGLE_WORKING, "bin") + os.pathsep + env.get("PATH", "")
 
-    # Export config.env keys as environment variables for the bot process.
-    # In the official Docker deployment, config.env is loaded via --env-file,
-    # which exports every key into the environment. WZML-X's Config.load_env()
-    # reads os.environ, and its load_config() only imports a config.py module
-    # (which we do not have). Without this export, TELEGRAM_API / TELEGRAM_HASH
     # / BOT_TOKEN etc. never reach the bot and pyrogram dies with
     # "The API key is required for new authorizations".
-    # We re-parse the copy in the WZML-X dir so the injected BASE_URL wins.
     try:
         launch_cfg = parse_config(CONFIG_DST) or parse_config(CONFIG_SRC)
     except Exception:
@@ -12269,11 +12167,9 @@ def main():
             env[_wzk] = _wzv
     log("Upload engine tuned: 16 parallel connections, 200 parts/s")
 
-    # ------------------------------------------------------------------
     # Pre-flight: validate BOT_TOKEN and USER_SESSION_STRING directly
     # against Telegram BEFORE starting the bot, so config problems are
     # reported with a clear, actionable message instead of a bot crash.
-    # ------------------------------------------------------------------
     try:
         pf_script = os.path.join(WZMLX_DIR, "_preflight_check.py")
         with open(pf_script, "w") as f:
@@ -12407,7 +12303,6 @@ asyncio.run(main())
         else:
             notify(config, "crash", f"Bot crashed with exit code {exit_code}")
             log("Bot process crashed — check logs above", "ERROR")
-            # Show the tail of the crash and explain every known signature
             tail = "\n".join(_bot_lines[-25:])
             log("=" * 60)
             log("CRASH ANALYSIS — last lines before exit:")
@@ -12429,9 +12324,7 @@ asyncio.run(main())
         log(f"Error running bot: {e}", "ERROR")
         notify(config, "crash", f"Bot runner error: {e}")
     finally:
-        # ------------------------------------------------------------------
         # Step 9: Cleanup
-        # ------------------------------------------------------------------
         SHUTDOWN_EVENT.set()
 
         log("=" * 60)
@@ -12457,9 +12350,7 @@ asyncio.run(main())
         log("WZML-X Kaggle runner — shutdown complete")
 
 
-# ============================================================================
 # ENTRY POINT
-# ============================================================================
 
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, handle_signal)
