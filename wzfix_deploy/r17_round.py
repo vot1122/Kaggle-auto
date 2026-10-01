@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """WZFIX R17 payload (v15.84) — web downloader.
 
-Fetches r17_webdl.py from Drive (sha256-pinned), writes it into
+Fetches _remote_r17_webdl.py from GitHub first, then Drive (sha256-pinned), writes it into
 bot/helper/wzfix/, registers the /webdl routes on the bot stream
 server (same /_dl anchor the wzadmin round uses) and adds the wserver
 /webdl proxy with true streaming for file downloads (the buffered
@@ -13,9 +13,8 @@ Kaggle notebook kernel source must stay under 1 MB. Idempotent: every
 edit is marker-checked; on any failure exits 1 and the notebook logs
 it and keeps booting (webdl is skipped, the bot is unaffected).
 
-Reference copy — the live version is the Drive file
-wzfix_r17_round.py (id 16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl); if you
-edit it, update MODULE_SHA and the _r17_sha pin in the notebook.
+GitHub is primary; the existing Drive file is the backup. Keep each
+backup byte-identical to its GitHub source so the shared SHA pin matches.
 """
 import hashlib
 import os
@@ -23,9 +22,15 @@ import subprocess
 import sys
 import urllib.request
 
-MODULE_URL = ("https://drive.usercontent.google.com/download?"
-              "id=1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi&export=download&confirm=t")
-MODULE_SHA = "f8ed7c1b00f4303211dc89433e346a5334a03934c0bafaffdda0b9199e0cb1cd"
+MODULE_GITHUB_URL = (
+    "https://raw.githubusercontent.com/vot1122/Kaggle-auto/main/"
+    "_remote_r17_webdl.py"
+)
+MODULE_DRIVE_URL = (
+    "https://drive.usercontent.google.com/download?"
+    "id=1bV2f-VG1R4FCZoJSCyQxzSAd44aJr3Bi&export=download&confirm=t"
+)
+MODULE_SHA = "2c4c27aef90aa709d364483964449fbe82f8c77c229b3b368fe0d3d1efa24e84"
 
 WZMLX = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else ".")
 
@@ -37,12 +42,25 @@ def die(msg):
 
 def main():
     # 1. module
-    try:
-        raw = urllib.request.urlopen(MODULE_URL, timeout=60).read()
-    except Exception as e:
-        die(f"module fetch failed: {e}")
-    if hashlib.sha256(raw).hexdigest() != MODULE_SHA:
-        die("module sha256 mismatch — refusing to install")
+    raw = None
+    errors = []
+    for source, url in (("GitHub", MODULE_GITHUB_URL),
+                        ("Google Drive", MODULE_DRIVE_URL)):
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=60) as response:
+                candidate = response.read()
+            digest = hashlib.sha256(candidate).hexdigest()
+            if digest != MODULE_SHA:
+                raise ValueError(f"SHA-256 mismatch: {digest}")
+            raw = candidate
+            print(f"r17: module fetched from {source} and verified")
+            break
+        except Exception as e:
+            errors.append(f"{source}: {e}")
+    if raw is None:
+        die("module fetch failed: " + " | ".join(errors))
     wzdir = os.path.join(WZMLX, "bot", "helper", "wzfix")
     os.makedirs(wzdir, exist_ok=True)
     mod = os.path.join(wzdir, "r17_webdl.py")
