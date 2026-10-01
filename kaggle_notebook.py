@@ -3,7 +3,7 @@
 """
 ================================================================================
  kaggle_notebook.py — WZML-X Telegram Bot Runner for Kaggle
- WZFIX BUILD: v19.3.0-r19  (persistent history, download counter, cancel fix)
+ WZFIX BUILD: v19.4.0-r19  (block list / do-not-allow)
 ================================================================================
  A single-cell Kaggle notebook script that:
 
@@ -109,7 +109,7 @@ def _r19_start_watchdog():
     errors never trigger an exit."""
     import urllib.request
 
-    ver = "v19.3.0-r19"
+    ver = "v19.4.0-r19"
 
     def _r19_poll():
         import time as _r19t
@@ -10364,7 +10364,7 @@ async def _wzfix_record_start(message):
             "https://drive.usercontent.google.com/download?"
             "id=16VVAlGx2m0YsLtb0A0Tv1oZIf5EXIkbl&export=download&confirm=t"
         )
-        _r17_sha = "5816b9cc4596c10752b13f1b077edc4d980541138025e556839e84b9fff5cd09"
+        _r17_sha = "31cdae09710901998e5ffbd0a38a42171a7640c49a626b366192c7431e1f33b3"
         _r17 = urllib.request.urlopen(_r17_url, timeout=60).read()
         if __import__("hashlib").sha256(_r17).hexdigest() != _r17_sha:
             raise ValueError("payload sha mismatch")
