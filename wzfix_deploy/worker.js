@@ -166,9 +166,15 @@ export default {
     // -------------------------------------------------------
     if (path === '/tunnel-status') {
       const all = await getAllTunnels(env);
+      const pools = {};
+      for (const bk of Object.keys(all)) {
+        const pp = await getPool(bk, env);
+        if (pp && pp.length) pools[bk] = pp.length;
+      }
       return new Response(JSON.stringify({
         tunnels: all,
-        count: Object.keys(all).length
+        count: Object.keys(all).length,
+        pools: pools
       }), {
         headers: { 'Content-Type': 'application/json' }
       });
